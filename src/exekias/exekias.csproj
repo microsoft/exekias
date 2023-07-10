@@ -1,0 +1,53 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+	<Import Project="../../Version.proj" />
+	<ItemGroup>
+		<PackageReference Include="Azure.Bicep.MSBuild" Version="0.17.1" />
+		<PackageReference Include="Azure.Bicep.CommandLine.win-x64" Version="0.17.1" />
+		<PackageReference Include="Azure.Identity" Version="1.9.0" />
+		<PackageReference Include="Azure.ResourceManager.AppService" Version="1.0.1" />
+		<PackageReference Include="Azure.ResourceManager.Batch" Version="1.1.1" />
+		<PackageReference Include="Azure.ResourceManager.EventGrid" Version="1.0.1" />
+		<PackageReference Include="Azure.ResourceManager.Resources" Version="1.4.0" />
+		<PackageReference Include="Azure.ResourceManager.Storage" Version="1.1.1" />
+		<PackageReference Include="Azure.Storage.Blobs" Version="12.16.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="6.0.0" />
+		<PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Exekias.CosmosDb\Exekias.CosmosDb.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="..\..\Version.proj" Link="Version.proj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Bicep Include="main.bicep" />
+	</ItemGroup>
+	
+	<ItemGroup>
+		<AdditionalProject Include="..\Exekias.DataImport\Exekias.DataImport.csproj" />
+		<AdditionalProject Include="..\Exekias.AzureFunctions\Exekias.AzureFunctions.csproj" />
+	</ItemGroup>
+	
+	<!--
+	Custom target to copy additional components to a published directory. 
+	- main.json transformed from bicep files as described in https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/msbuild-bicep-file
+	- packaged projects to deploy to Azure function apps and a batch account.
+	-->
+	<Target Name="CopyAdditionalZipPackages" AfterTargets="Publish">
+		<Copy SourceFiles="$(TargetDir)main.json" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+		<MSBuild Projects="@(AdditionalProject)" Targets="Restore" Properties="RuntimeIdentifier=win-x64;SelfContained=false;IsRestoring=true" />
+		<MSBuild Projects="@(AdditionalProject)" Targets="Build;Publish" Properties="RuntimeIdentifier=win-x64;SelfContained=false;PublishDir=bin/exekias" />
+		<ZipDirectory SourceDirectory="@(AdditionalProject->'%(RootDir)%(Directory)bin/exekias')" DestinationFile="$(PublishDir)%(AdditionalProject.FileName).zip" Overwrite="true" />
+	</Target>
+
+</Project>

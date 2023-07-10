@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<UserSecretsId>exekias-dev</UserSecretsId>
+		<Version>1.0.1</Version>
+		<Platforms>x64</Platforms>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging.ApplicationInsights" Version="2.21.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Exekias.AzureStores\Exekias.AzureStores.csproj" />
+		<ProjectReference Include="..\Exekias.Core\Exekias.Core.csproj" />
+		<ProjectReference Include="..\Exekias.CosmosDb\Exekias.CosmosDb.csproj" />
+		<ProjectReference Include="..\Exekias.SDS.Blob\Exekias.SDS.Blob.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="appsettings.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+	<Import Project="../CopyNetCDF.targets"/>
+
+</Project>

@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>exekias</UserSecretsId>
+    <Platforms>AnyCPU;x86</Platforms>
+  </PropertyGroup>
+  <Import Project="../../Version.proj" />
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Functions.Extensions" Version="1.1.0" />
+    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.DurableTask" Version="2.9.1" />
+    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.EventGrid" Version="2.1.0" />
+    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage" Version="5.1.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="6.0.1" />
+    <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="4.1.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Exekias.AzureStores\Exekias.AzureStores.csproj" />
+    <ProjectReference Include="..\Exekias.Core\Exekias.Core.csproj" />
+    <ProjectReference Include="..\Exekias.CosmosDb\Exekias.CosmosDb.csproj" />
+    <ProjectReference Include="..\Exekias.SDS.Blob.Batch\Exekias.SDS.Blob.Batch.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="host.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+	  <None Update="local.settings.json">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		  <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+	  </None>
+  </ItemGroup>
+
+	<Import Project="../CopyNetCDF.targets" />
+	
+</Project>

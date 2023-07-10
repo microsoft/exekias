@@ -1,0 +1,31 @@
+<Project>
+
+	<Target Name="CopyNetcdf" AfterTargets="Publish">
+		<!-- Locate netcdf.dll with either LIBNETCDFPATH environment variable or in ProgramFiles folder -->
+		<ItemGroup Condition="'$(LIBNETCDFPATH)' == ''">
+			<netCDF Include="$(ProgramFiles)\netcdf*\bin\netcdf.dll" />
+		</ItemGroup>
+		<ItemGroup Condition="'$(LIBNETCDFPATH)' != ''">
+			<netCDF Include="$(LIBNETCDFPATH)" />
+		</ItemGroup>
+		<!-- Check we've found a single existing netcdf.dll file -->
+		<Error Condition="'@(netCDF->Count())' == '0'" Text="netCDF not found. Install netCDF or specify LIBNETCDFPATH environment variable pointing to a netcdf.dll." />
+		<Error Condition="'@(netCDF->Count())' != '1'" Text="More than one netCDF version installed. Use LIBNETCDFPATH environment variable pointing to a specific version of netcdf.dll." />
+		<Error Condition="!Exists(@(netCDF))" Text="The specified LIBNETCDFPATH doesn't exist: @(netCDF)" />
+		<!-- Enumerate all .dll files side by side with netcdf.dll -->
+		<PropertyGroup>
+			<netCDFDir>@(netCDF->'%(RootDir)%(Directory)')</netCDFDir>
+		</PropertyGroup>
+		<ItemGroup>
+			<netCDFAll Include="$(netCDFDir)\netcdf.dll" />
+			<netCDFAll Include="$(netCDFDir)\hdf5.dll" />
+			<netCDFAll Include="$(netCDFDir)\hdf5_hl.dll" />
+			<netCDFAll Include="$(netCDFDir)\zlib1.dll" />
+			<netCDFAll Include="$(netCDFDir)\libcurl.dll" />
+		</ItemGroup>
+		<!-- Copy the DLLs to publish directory -->
+		<Message Importance="high" Text="@(netCDFAll->'%(Filename)%(Extension)', ' ') -> $(PublishDir)"/>
+		<Copy SourceFiles="@(netCDFAll)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+	</Target>
+
+</Project>

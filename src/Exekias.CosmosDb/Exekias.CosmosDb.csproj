@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFramework>netstandard2.1</TargetFramework>
+	  <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="updateRunObject.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="updateRunObject.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.33.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="6.0.0" />
+	  <!-- Reference newer version directly since Cosmos 3.33 references vulberable version -->
+	  <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+    <PackageReference Include="System.Text.Json" Version="6.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Exekias.Core\Exekias.Core.csproj" />
+  </ItemGroup>
+
+</Project>

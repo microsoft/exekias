@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Batch" Version="15.4.0" />
+	  <!-- Reference newer version directly since Batch 15.4 references vulberable version -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Exekias.SDS.Blob\Exekias.SDS.Blob.csproj" />
+  </ItemGroup>
+
+</Project>

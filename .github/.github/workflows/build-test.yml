@@ -1,0 +1,48 @@
+# This workflow will build a .NET project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  URL_NETCDF_WIN: https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netCDF4.9.2-NC4-64.exe
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 6.0.x
+    - name: Build
+      run: |
+        dotnet build src/exekias
+        dotnet build src/Exekias.AzureFunctions
+        dotnet build src/Exekias.DataImport
+    - name: Download NetCDF
+      shell: pwsh
+      run: |
+        Invoke-WebRequest $env:URL_NETCDF_WIN -OutFile ${{ runner.temp }}\netcdf.exe
+        7z x ${{ runner.temp }}\netcdf.exe bin/*.dll -o${{ runner.temp }} -y
+        Get-ChildItem ${{ runner.temp }}\bin
+    - name: Start azurite
+      shell: bash
+      run: |
+        npm install -g azurite
+        azurite --silent --location ${{ runner.temp }}\azurite --debug ${{ runner.temp }}\azurite.log --blobHost &
+    - name: Test
+      run: |
+        dotnet test --verbosity normal src/Exekias.Core.Tests
+        dotnet test --verbosity normal src/Exekias.SDS.Tests
+        dotnet test --verbosity normal src/Exekias.AzureStorageEmulator.Tests
+      env:
+        LIBNETCDFPATH: ${{ runner.temp }}\bin\netcdf.dll
