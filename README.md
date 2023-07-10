@@ -1,4 +1,4 @@
-[![CI](https://github.com/vassilyl/exekias/actions/workflows/build-test.yml/badge.svg)](https://github.com/vassilyl/exekias/actions/workflows/build-test.yml)
+[![CI](https://github.com/microsoft/exekias/actions/workflows/build-test.yml/badge.svg)](https://github.com/microsoft/exekias/actions/workflows/build-test.yml)
 
 # EXEKIAS
 
