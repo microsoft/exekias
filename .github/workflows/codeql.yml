@@ -68,6 +68,8 @@ jobs:
     #   modify them (or add more) to build your code if your project, please refer to the EXAMPLE below for guidance.
 
     - run: |
+        dotnet remove src/exekias package Azure.Bicep.CommandLine.win-x64
+        dotnet add src/exekias package Azure.Bicep.CommandLine.linux-x64
         dotnet build src/exekias
         dotnet build src/Exekias.AzureFunctions
         dotnet build src/Exekias.DataImport
