@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.2] - 2023-06-27
+## [2.0.3] - 2023-08-23
 
 ### Changed
-- Python `exekias.Config.init_local_run()` creates indented `params.json`. 
+- Backend doesn't use Discover Run operation any more. The operation causes performance and cost issues.
+  The downside is that data updates to old existing runs are picked up by periodic housekeeping only.
+- Backend auxiliary storage account is configured with public blob access disabled
+- Backend canary test does several attempts to generate update events to account for transient provcesses.
+- `exekias` upload/download properly propagate last write time and skip data transfer when
+  file and blob are identical.
+
+## [2.0.2] - 2023-06-27
 
 ### Fixed
 - 27630 "No subscription available" on an Azure VM. Disabled use of Azure managed identities.

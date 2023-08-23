@@ -11,33 +11,6 @@ namespace Exekias.AzureFunctions
 {
     partial class TriggersAndActivities
     {
-        [FunctionName(nameof(DiscoverRun))]
-        public async Task<string?> DiscoverRun(
-            [ActivityTrigger] string path,
-            ILogger logger)
-        {
-            try
-            {
-                logger.LogDebug("Discovering run directory for {0}.", path);
-                var result = await exekiasStore.GetRun(path);
-                logger.LogInformation("Discovered run directory {0} for {1}.", result ?? "(none)", path);
-                return result;
-            }
-            catch (Exception error)
-            {
-                logger.LogError(error, "Error while discovering run directory for {0}.", path);
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Invoke DiscoverRun activity.
-        /// </summary>
-        /// <param name="context"></param>
-        /// <param name="path"></param>
-        /// <returns></returns>
-        public static Task<string?> CallDiscoverRunActivityAsync(IDurableOrchestrationContext context, string path)
-            => context.CallActivityAsync<string?>(nameof(DiscoverRun), path);
 
         [FunctionName(nameof(ClassifyFiles))]
         public Task<FileClass[]> ClassifyFiles(

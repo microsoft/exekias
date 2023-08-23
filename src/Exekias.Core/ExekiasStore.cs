@@ -54,13 +54,6 @@ namespace Exekias.Core
         /// <param name="top">Maximum number of elements to return. Set to <c>0</c> or negative to return all values.</param>
         /// <returns></returns>
         IAsyncEnumerable<ExekiasObject> QueryMetaObjects(string where, string orderBy, bool orderAscending, int top);
-
-        /// <summary>
-        /// Find out which run the path belongs to.
-        /// </summary>
-        /// <param name="path">Run or <c>null</c> if no run found for the path in the store..</param>
-        /// <returns></returns>
-        ValueTask<string?> GetRun(string path);
     }
 
     /// <summary>

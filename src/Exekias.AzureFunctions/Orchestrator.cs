@@ -171,21 +171,19 @@ namespace Exekias.AzureFunctions
                         }
                         else
                         {
-                            run = await TriggersAndActivities.CallDiscoverRunActivityAsync(context, dataFile.Path);
-                            if (null != run)
-                            {
-                                byRun[run] = RunData.Create(run, null, dataFile);
-                                runCache[run] = dataFile.LastWriteTime;
-                            }
-                            else
-                            {
-                                // meta hasn't been registered yet, ignore until meta appears.
-                                files.Add(dataFile);
-                            }
+                            // Option 1: new run in Run Store, the update event for meta will arrive later.
+                            //   In this case UpdateRun will notice the files once meta arrives.
+                            // Option 2: data update for an old run (more than 2d, not in cache but in Exekias Store).
+                            //   The change will wait until Full Scan.
+                            files.Add(dataFile);
                         }
                     }
 
                 }
+
+                if (files.Count > 0)
+                    logger.LogInformation(
+                        $"Pipeline skips the following updates because no metadata found: {string.Join(", ", files.ConvertAll(f => f.Path))}");
 
                 // start processing and forget the changes
                 await Task.WhenAll(byRun.Select(async item =>
@@ -198,12 +196,7 @@ namespace Exekias.AzureFunctions
                     {
                         logger.LogError(error, "Error while updating run {run}, ignored.", item.Key);
                     }
-                }
-                    ));
-
-                if (files.Count > 0)
-                    logger.LogInformation(
-                        $"Pipeline skips the following updates because no metadata found: {string.Join(", ", files.ConvertAll(f => f.Path))}");
+                }));
 
                 // remove uptdated run cache values
                 var maxTimeSpan = TimeSpan.FromHours(input.RunCacheTimeoutHours);

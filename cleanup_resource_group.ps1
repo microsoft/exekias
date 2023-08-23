@@ -33,8 +33,10 @@ $timeout = (Get-Date) + (New-TimeSpan -Seconds 60)
 while (((Get-Date) -lt $timeout) -and (Get-AzResource -ResourceGroupName $resourceGroup)) {
     Start-Sleep -Seconds 1
 }
-if ((Get-AzResource -ResourceGroupName $resourceGroup)) {
-    Write-Host "Resource group is not empty"
+$resources_left = Get-AzResource -ResourceGroupName $resourceGroup
+if ($resources_left) {
+    Write-Host $resources_left
+    Write-Error "[$(Get-Date)] Resource group is not empty"
     exit 1
 }
 

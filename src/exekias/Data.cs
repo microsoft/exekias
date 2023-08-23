@@ -3,6 +3,7 @@ using Azure.Storage.Blobs.Models;
 using exekiascmd;
 using System.CommandLine;
 using System.CommandLine.Invocation;
+using System.Diagnostics;
 
 partial class Program
 {
@@ -30,6 +31,19 @@ partial class Program
             console.WriteLine($"{blob.Properties.LastModified?.LocalDateTime} {blob.Properties.ContentLength,19} {blob.Name.Substring(prefix.Length)}");
         });
         return;
+    }
+
+    // blob metadata key
+    const string LAST_WRITE_TIME = "LastWriteTimeSecondsSinceEpoch";
+
+    static DateTimeOffset BlobLastWriteTime(BlobProperties blobProperties)
+    {
+        if (blobProperties.Metadata.TryGetValue(LAST_WRITE_TIME, out string value))
+        {
+            var secondsSinceEpoch = double.Parse(value);
+            return DateTimeOffset.FromUnixTimeMilliseconds((long)Math.Round(secondsSinceEpoch * 1000));
+        }
+        return blobProperties.LastModified;
     }
 
     static async Task DoDataUpload(
@@ -70,28 +84,27 @@ partial class Program
         }
         // create ContainerClient object
         var containerClient = CreateBlobContainerClient(cfg);
-        // upload all files in parallel from dir, recursively, to container
+        // enumerate all files in parallel from dir, recursively, and create upload tasks
         ProgressIndicator pi = new(console);
-        var tasks = Array.ConvertAll(files, file =>
+        Task[] uploadTasks = await files.ToAsyncEnumerable().SelectAwait(async file =>
         {
             var blobClient = containerClient.GetBlobClient(file.blobName);
             // upload file only if blob doesn't exist or older
-            if (blobClient.Exists())
+            if (await blobClient.ExistsAsync())
             {
-                BlobProperties blobProperties = blobClient.GetProperties();
-                // blobLastWriteTime is LastWriteTime metadata element or blob LastModified property
-                var blobLastWriteTime = blobProperties.Metadata.ContainsKey("LastWriteTime")
-                    ? DateTime.Parse(blobProperties.Metadata["LastWriteTime"])
-                    : blobProperties.LastModified;
+                BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
                 if (blobProperties.ContentLength == file.info.Length
-                    && blobLastWriteTime >= file.info.LastWriteTime)
+                    && Math.Abs((BlobLastWriteTime(blobProperties) - file.info.LastWriteTimeUtc).TotalMilliseconds) < 1)
                 {
+                    Trace.TraceInformation($"Skipping {file.info.FullName} because it is up to date.");
+                    pi.NewProgress(-1).Report(0);  // report skipped
                     return Task.CompletedTask;
                 }
             }
+            Trace.TraceInformation($"Uploading {file.info.Length} B of {file.info.FullName}.");
+            // upload the file content to the blob
             return Task.Run(async () =>
             {
-                // upload the file content to the blob
                 await blobClient.UploadAsync(file.info.FullName, new BlobUploadOptions()
                 {
                     TransferOptions = new Azure.Storage.StorageTransferOptions()
@@ -103,13 +116,13 @@ partial class Program
                 });
                 // set blob LastWriteTime metadata item to the file LastWriteTime value
                 var metadata = new Dictionary<string, string>();
-                metadata["LastWriteTime"] = file.info.LastWriteTimeUtc.ToString("o");
+                metadata[LAST_WRITE_TIME] = (new DateTimeOffset(file.info.LastWriteTimeUtc).ToUnixTimeMilliseconds() / 1000.0).ToString("F3");
                 await blobClient.SetMetadataAsync(metadata);
             });
-        });
-        await Task.WhenAll(tasks);
-        var skipped = tasks.Where(t => t==Task.CompletedTask).Count();
-        pi.Flush(skipped > 0 ? $", skipped {skipped}" : "");
+        }).ToArrayAsync();
+        // await when all uploads complete
+        await Task.WhenAll(uploadTasks);
+        pi.Flush();
         return;
     }
 
@@ -137,7 +150,7 @@ partial class Program
         // check run is not empty
         if (run == "")
         {
-            Console.WriteLine($"Run cannot be empty");
+            Console.WriteLine($"Run id cannot be empty");
             ctx.ExitCode = 1;
             return;
         }
@@ -158,24 +171,32 @@ partial class Program
             tasks.Add(Task.Run(async () =>
             {
                 BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
-                await blobClient.DownloadToAsync(localPath, new BlobDownloadToOptions()
+                var blobLastWriteTime = BlobLastWriteTime(blobProperties);
+                var fi = new FileInfo(localPath);
+                if (fi.Exists && fi.Length == blobProperties.ContentLength
+                    && Math.Abs((blobLastWriteTime - fi.LastWriteTimeUtc).TotalMilliseconds) < 1)
                 {
-                    TransferOptions = new Azure.Storage.StorageTransferOptions()
+                    Trace.TraceInformation($"Skipping {fi.FullName} because it is up to date.");
+                    pi.NewProgress(-1).Report(0);  // report skipped
+                }
+                else
+                {
+                    Trace.TraceInformation($"Downloading {blobProperties.ContentLength} B to {fi.FullName}.");
+                    await blobClient.DownloadToAsync(localPath, new BlobDownloadToOptions()
                     {
-                        MaximumConcurrency = 8,
-                        MaximumTransferSize = 16 * 1024 * 1024,
-                    },
-                    ProgressHandler = pi.NewProgress(blobProperties.ContentLength)
-                });
-                // blobLastWriteTime is LastWriteTime metadata element or blob LastModified property
-                var blobLastWriteTime = blobProperties.Metadata.ContainsKey("LastWriteTime")
-                    ? DateTime.Parse(blobProperties.Metadata["LastWriteTime"])
-                    : blobProperties.LastModified;
-                File.SetLastWriteTime(localPath, blobLastWriteTime.DateTime);
+                        TransferOptions = new Azure.Storage.StorageTransferOptions()
+                        {
+                            MaximumConcurrency = 8,
+                            MaximumTransferSize = 16 * 1024 * 1024,
+                        },
+                        ProgressHandler = pi.NewProgress(blobProperties.ContentLength)
+                    });
+                    fi.LastWriteTimeUtc = blobLastWriteTime.DateTime;
+                }
             }));
         });
         await Task.WhenAll(tasks);
-        pi.Flush("");
+        pi.Flush();
         return;
     }
 }

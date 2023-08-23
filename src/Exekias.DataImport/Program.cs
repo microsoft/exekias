@@ -14,8 +14,6 @@ using System.Text.Json;
 
 var runId = args[0];
 var runFile = args[1];
-// add location of netcdf.dll to PATH
-Environment.SetEnvironmentVariable("PATH", AppDomain.CurrentDomain.BaseDirectory + ';' + Environment.GetEnvironmentVariable("PATH"));
 // https://learn.microsoft.com/en-us/azure/azure-monitor/app/ilogger#console-application
 using var appInsightsChannel = new InMemoryChannel();
 try

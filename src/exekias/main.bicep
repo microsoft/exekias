@@ -51,6 +51,9 @@ resource syncStore 'Microsoft.Storage/storageAccounts@2022-09-01' = {
     sku: {
         name: 'Standard_LRS'
     }
+    properties: {
+        allowBlobPublicAccess: false
+    }
 }
 
 // Batch account

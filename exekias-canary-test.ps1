@@ -31,6 +31,9 @@ if (Test-Path ~/.exekias.json) {
 
 Write-Host "[$(Get-Date)] Starting canary test."
 .\cleanup_resource_group.ps1 $subscription $resourceGroup
+if (-not $?) {
+    exit $LASTEXITCODE
+}
 
 Write-Host "[$(Get-Date)] Start deployment of backend..."
 $context = Set-AzContext -Subscription $subscription
@@ -103,24 +106,46 @@ try {
             Write-Error "The content of the downloaded file $($file.Name) is not the same as the original one."
             exit 1
         }
-        if ((Get-ItemPropertyValue $file -Name LastWriteTime) -ne (Get-ItemPropertyValue "$download_relative_path/$runid/$file_relative_path" -Name LastWriteTime)) {
-            Write-Error "The date/time of the downloaded file $($file_relative_path) is not the same as the original one."
+        $uploaded_time = (Get-ItemPropertyValue $file -Name LastWriteTime)
+        $downloaded_time = (Get-ItemPropertyValue "$download_relative_path/$runid/$file_relative_path" -Name LastWriteTime)
+        $time_difference = [Math]::Abs(($uploaded_time - $downloaded_time).TotalMilliseconds)
+        if ($time_difference -ge 1) {
+            Write-Error "The date/time of the downloaded file $($file_relative_path) is not the same as the original one, $downloaded_time != $uploaded_time, the difference is $time_difference ms."
             exit 1
         }
     }
-} finally {
-    Remove-Item -Path $sample_folder -Recurse
-} 
 Write-Host "[$(Get-Date)] Waiting for a job to be created..."
 $batch = Get-AzBatchAccountKey -ResourceGroupName $resourceGroup -Name "${storageAccount}8sync"
+    $attempts = 5
+    while ($attempts -gt -0) {
 $timeout = (Get-Date) + (New-TimeSpan -Seconds 120)
 while (((Get-Date) -lt $timeout) -and -not $batchjob) {
     Start-Sleep -Seconds 5
     $batchjob = Get-AzBatchJob -BatchContext $batch
 }
+        if ($batchjob -or $attempts -eq 1) {
+            $attempts = 0
+        }
+        else {
+            # first event sometimes lost due to transient processes after deployment.
+            # update file times and upload them again.
+            $attempts -= 1
+            Write-Host "[$(Get-Date)] $attempts more attempt(s) to raise blob events..."
+            $uploaded | ForEach-Object { $_.LastWriteTime = (Get-Date) }
+            & $exekias data upload $upload_relative_path
+            if ($LASTEXITCODE -ne 0) {
+                Write-Error "Upload failed, exit code: $LASTEXITCODE"
+                exit 1
+            }
+        }
+    }
+}
+finally {
+    Remove-Item -Path $sample_folder -Recurse
+} 
 
 Write-Host "[$(Get-Date)] Query for runs..."
-$runs = & $exekias query --json|ConvertFrom-Json
+$runs = & $exekias query --json | ConvertFrom-Json
 if (($runs.Count -ne 1) -or ($runs[0].run -ne "12345678-123456-samples") -or ($runs.params.TestKey -ne "test value")) {
     Write-Error "Query failed."
     exit 1
@@ -137,8 +162,8 @@ if ($batchtaskstate -ne "Completed") {
     exit 1
 }
 Write-Host "[$(Get-Date)] Checking batch task execution result:"
-(Get-AzBatchTask -JobId exekias -BatchContext $batch).ExecutionInformation| Select-Object Result,FailureInformation
-$runs = & $exekias query --json|ConvertFrom-Json
+(Get-AzBatchTask -JobId exekias -BatchContext $batch).ExecutionInformation | Select-Object Result, FailureInformation
+$runs = & $exekias query --json | ConvertFrom-Json
 if (-not ($runs.Variables.CSV -and ($runs.Variables.CSV[0] -eq "columnTitle"))) {
     Write-Error "Run metadata doesn't have updated information about data columns."
     exit 1

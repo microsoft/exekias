@@ -1,4 +1,5 @@
-﻿using System.CommandLine;
+using System.CommandLine;
+using System.Xml.Schema;
 
 namespace exekiascmd
 {
@@ -6,8 +7,14 @@ namespace exekiascmd
     {
         private List<Progress> progressList = new List<Progress>();
         private long total = 0;
+        private int skipped = 0;
         public IProgress<long> NewProgress(long Total)
         {
+            if (Total < 0)
+            {
+                skipped += 1;
+                Total = 0;
+            }
             var progress = new Progress(Signal, Total);
             total += Total;
             progressList.Add(progress);
@@ -20,23 +27,22 @@ namespace exekiascmd
         {
             var now = DateTime.Now;
             if ((now - lastUpdate).TotalSeconds > frequencySeconds)
-            {
-                if (firstUpdate == DateTime.MinValue) { firstUpdate = now; }
-                lastUpdate = now;
-                int count = 0;
-                long value = 0;
-                foreach (var progress in progressList)
+                lock (this)
                 {
-                    value += progress.Value;
-                    if (progress.Value >= progress.Total) count += 1;
+                    if (firstUpdate == DateTime.MinValue) { firstUpdate = now; }
+                    lastUpdate = now;
+                    int count = 0;
+                    long value = 0;
+                    foreach (var progress in progressList)
+                    {
+                        value += progress.Value;
+                        if (progress.Value >= progress.Total) count += 1;
+                    }
+                    var elapsed = (DateTime.Now - firstUpdate).TotalSeconds;
+                    var estimated = value == 0 ? elapsed : elapsed * total / value;
+                    var eta = TimeSpan.FromSeconds(Math.Round(estimated - elapsed));
+                    console.Write($"Files: {count - skipped} done {skipped} skipped of {progressList.Count}, {fmt(value)} of {fmt(total)}, ETA {eta:g}                    \r");
                 }
-                var elapsed = (DateTime.Now - firstUpdate).TotalSeconds;
-                if (value > 0)
-                {
-                    var eta = TimeSpan.FromSeconds(Math.Round(elapsed * total / value - elapsed));
-                    console.Write($"Files: {count} of {progressList.Count}, {fmt(value)} of {fmt(total)}, ETA {eta:g}                    \r");
-                }
-            }
         }
 
         static string fmt(long bytes)
@@ -63,10 +69,11 @@ namespace exekiascmd
             }
         }
 
-        public void Flush(string suffix)
+        public void Flush()
         {
-            var elapsed = TimeSpan.FromSeconds(Math.Round((DateTime.Now - firstUpdate).TotalSeconds));
-            console.WriteLine($"{progressList.Count} files, {fmt(total)} in {elapsed:g}{suffix}                         ");
+            var elapsed = firstUpdate == DateTime.MinValue ? TimeSpan.Zero : TimeSpan.FromSeconds(Math.Round((DateTime.Now - firstUpdate).TotalSeconds));
+            var strSkipped = skipped > 0 ? $", skipped {skipped}" : "";
+            console.WriteLine($"{progressList.Count} files, {fmt(total)} in {elapsed:g}{strSkipped}                         ");
             progressList.Clear();
         }
     }

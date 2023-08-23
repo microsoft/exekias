@@ -268,19 +268,6 @@ namespace Exekias.CosmosDb
         }
 
         /// <inheritdoc/>
-        /// <remarks>This is an expensive operation that require cross-partition query.</remarks>
-        public async ValueTask<string?> GetRun(string path)
-        {
-            logger.LogDebug("Start discoverying run directory for {0}.", path);
-            var container = await containerPromise;
-            var query = new QueryDefinition("SELECT VALUE r.run FROM r WHERE CONCAT(r.run,'/',r.path)=@path").WithParameter("@path", path);
-            var response = container.GetItemQueryIterator<string>(query);
-            //return await response.FirstOrDefaultAsync();
-            return await AsyncEnumerate(response, query.QueryText).FirstOrDefaultAsync();
-
-        }
-
-        /// <inheritdoc/>
         /// <remarks>The <paramref name="where"/> filter expression is a scalar expression of
         /// Azure Cosmos DB SQL query () against input_alias named 'run',
         /// e.g. STARTSWITH(run.params.config, 'alpha-') chooses runs where metadata file contents has a value 'config' starting with 'alpha-'.</remarks>

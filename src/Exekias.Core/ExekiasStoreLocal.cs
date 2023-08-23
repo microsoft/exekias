@@ -76,9 +76,6 @@ namespace Exekias.Core
         }
 
 
-        public ValueTask<string?> GetRun(string path) =>
-            new ValueTask<string?>(database.FirstOrDefault(item => (item.Run + '/' + item.Path) == path)?.Run);
-
         public ValueTask PutObject(ExekiasObject runFile)
         {
             if (null == runFile.Run || null == runFile.Path)
