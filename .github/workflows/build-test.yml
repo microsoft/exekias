@@ -11,7 +11,8 @@ on:
 
 env:
   URL_NETCDF_WIN: https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netCDF4.9.2-NC4-64.exe
-
+permissions:
+  id-token: write
 jobs:
   build:
 
@@ -46,3 +47,16 @@ jobs:
         dotnet test --verbosity normal src/Exekias.AzureStorageEmulator.Tests
       env:
         LIBNETCDFPATH: ${{ runner.temp }}\bin\netcdf.dll
+    - name: Login via Az module
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+    - name: 'Get RG with powershell action'
+      uses: azure/powershell@v1
+      with:
+          inlineScript: |
+            Get-AzResourceGroup
+          azPSVersion: "latest"
