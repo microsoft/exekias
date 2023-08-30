@@ -33,7 +33,7 @@ jobs:
       run: |
         sudo apt update
         sudo apt install libnetcdf-dev -y
-        curl -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+        curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
         chmod +x ${{ runner.temp }}/bicep
 
 
@@ -73,4 +73,4 @@ jobs:
             ./exekias-canary-test.ps1
           azPSVersion: "latest"
       env:
-        EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/exekias.exe
+        EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/exekias
