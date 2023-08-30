@@ -29,10 +29,13 @@ jobs:
       uses: actions/setup-dotnet@v3
       with:
         dotnet-version: 6.0.x
-    - name: Install NetCDF
+    - name: Install NetCDF and bicep compiler
       run: |
         sudo apt update
         sudo apt install libnetcdf-dev -y
+        curl -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+        chmod +x ${{ runner.temp }}/bicep
+
 
     - name: Download NetCDF-win
       shell: pwsh
@@ -44,6 +47,7 @@ jobs:
       run: |
         dotnet publish src/exekias -c Release
       env:
+        BicepPath: ${{ runner.temp }}/bicep
         LIBNETCDFPATH: ${{ runner.temp }}/bin/netcdf.dll
     - name: Start azurite
       shell: bash
