@@ -21,7 +21,7 @@ jobs:
     env:
       EXEKIAS_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       EXEKIAS_RESOURCEGROUP: exekias-canary-github-win
-      EXEKIAS_STORAGEACCOUNT: exekiascanarygithubwin
+      EXEKIAS_STORAGEACCOUNT: exekiascanaryghw
 
     steps:
     - uses: actions/checkout@v3
@@ -59,7 +59,7 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         enable-AzPSSession: true
-    - name: 'Get RG with powershell action'
+    - name: Run canary test
       uses: azure/powershell@v1
       with:
           inlineScript: |
