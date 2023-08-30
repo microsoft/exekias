@@ -38,6 +38,8 @@ jobs:
     - name: Build
       run: |
         dotnet publish src/exekias -c Release
+      env:
+        LIBNETCDFPATH: ${{ runner.temp }}\bin\netcdf.dll
     - name: Start azurite
       shell: bash
       run: |
