@@ -25,15 +25,19 @@ jobs:
       EXEKIAS_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     steps:
-      - name: Set conditional env
+      - name: Windows specific setup
+        if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          echo "EXEKIAS_RESOURCEGROUP=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekias-canary-github-linux'; else echo 'exekias-canary-github-win'; fi)" >> $GITHUB_ENV
-          echo "EXEKIAS_STORAGEACCOUNT=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekiascanaryghl'; else echo 'exekiascanaryghw'; fi)" >> $GITHUB_ENV
-          echo "BIN_NAME=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekias'; else echo 'exekias.exe'; fi)" >> $GITHUB_ENV
-      - name: Install NetCDF and bicep compiler
+          echo EXEKIAS_RESOURCEGROUP=exekias-canary-github-win  >> $GITHUB_ENV
+          echo EXEKIAS_STORAGEACCOUNT=exekiascanaryghw >> $GITHUB_ENV
+          echo BIN_NAME=exekias.exe >> $GITHUB_ENV
+      - name: Linux specific setup
         if: matrix.os == 'ubuntu-latest'
         run: |
+          echo EXEKIAS_RESOURCEGROUP=exekias-canary-github-linux  >> $GITHUB_ENV
+          echo EXEKIAS_STORAGEACCOUNT=exekiascanaryghl >> $GITHUB_ENV
+          echo BIN_NAME=exekias
           sudo apt update
           sudo apt install libnetcdf-dev -y
           curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
