@@ -14,56 +14,70 @@ env:
 permissions:
   id-token: write
 jobs:
-  build:
+  build_test:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
 
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
 
     env:
       EXEKIAS_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       EXEKIAS_RESOURCEGROUP: exekias-canary-github-win
-      EXEKIAS_STORAGEACCOUNT: exekiascanaryghw
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: 6.0.x
-    - name: Download NetCDF
-      shell: pwsh
-      run: |
-        Invoke-WebRequest $env:URL_NETCDF_WIN -OutFile ${{ runner.temp }}\netcdf.exe
-        7z x ${{ runner.temp }}\netcdf.exe bin/*.dll -o${{ runner.temp }} -y
-        Get-ChildItem ${{ runner.temp }}\bin
-    - name: Build
-      run: |
-        dotnet publish src/exekias -c Release
-      env:
-        LIBNETCDFPATH: ${{ runner.temp }}\bin\netcdf.dll
-    - name: Start azurite
-      shell: bash
-      run: |
-        npm install -g azurite
-        azurite --silent --location ${{ runner.temp }}\azurite --debug ${{ runner.temp }}\azurite.log --blobHost &
-    - name: Test
-      run: |
-        dotnet test --verbosity normal src/Exekias.Core.Tests
-        dotnet test --verbosity normal src/Exekias.SDS.Tests
-        dotnet test --verbosity normal src/Exekias.AzureStorageEmulator.Tests
-      env:
-        LIBNETCDFPATH: ${{ runner.temp }}\bin\netcdf.dll
-    - name: Login via Az module
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        enable-AzPSSession: true
-    - name: Run canary test
-      uses: azure/powershell@v1
-      with:
-          inlineScript: |
-            ./exekias-canary-test.ps1
-          azPSVersion: "latest"
-      env:
-        EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/exekias.exe
+      - name: Set conditional env
+        run: |
+          echo "EXEKIAS_STORAGEACCOUNT=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekiascanaryghl'; else echo 'exekiascanaryghw'; fi)" >> $GITHUB_ENV
+          echo "BIN_NAME=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekias'; else echo 'exekias.exe'; fi)" >> $GITHUB_ENV
+      - name: Install NetCDF and bicep compiler
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install libnetcdf-dev -y
+          curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x ${{ runner.temp }}/bicep
+          
+      - uses: actions/checkout@v3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 6.0.x
+      - name: Download NetCDF
+        shell: pwsh
+        run: |
+          Invoke-WebRequest $env:URL_NETCDF_WIN -OutFile ${{ runner.temp }}/netcdf.exe
+          7z x ${{ runner.temp }}/netcdf.exe bin/*.dll -o${{ runner.temp }} -y
+          Get-ChildItem ${{ runner.temp }}/bin
+      - name: Build
+        run: |
+          dotnet publish src/exekias -c Release
+        env:
+          LIBNETCDFPATH: ${{ runner.temp }}/bin/netcdf.dll
+      - name: Start azurite
+        shell: bash
+        run: |
+          npm install -g azurite
+          azurite --silent --location ${{ runner.temp }}/azurite --debug ${{ runner.temp }}/azurite.log --blobHost &
+      - name: Test
+        run: |
+          dotnet test --verbosity normal src/Exekias.Core.Tests
+          dotnet test --verbosity normal src/Exekias.SDS.Tests
+          dotnet test --verbosity normal src/Exekias.AzureStorageEmulator.Tests
+        env:
+          LIBNETCDFPATH: ${{ runner.temp }}/bin/netcdf.dll
+      - name: Login via Az module
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+      - name: Run canary test
+        uses: azure/powershell@v1
+        with:
+            inlineScript: |
+              ./exekias-canary-test.ps1
+            azPSVersion: "latest"
+        env:
+          EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/${{ env.BIN_NAME }}
