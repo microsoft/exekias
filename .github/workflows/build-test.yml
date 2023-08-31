@@ -87,8 +87,8 @@ jobs:
             azPSVersion: "latest"
         env:
           EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/${{ env.BIN_NAME }}
-      - name: Clean up deployment
-        uses: azure/powershell@v1
-        with:
-          azPSVersion: latest
-          inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
+      # - name: Clean up deployment
+      #   uses: azure/powershell@v1
+      #   with:
+      #     azPSVersion: latest
+      #     inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
