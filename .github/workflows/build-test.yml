@@ -23,12 +23,12 @@ jobs:
 
     env:
       EXEKIAS_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      EXEKIAS_RESOURCEGROUP: exekias-canary-github-win
 
     steps:
       - name: Set conditional env
         shell: bash
         run: |
+          echo "EXEKIAS_RESOURCEGROUP=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekias-canary-github-linux'; else echo 'exekias-canary-github-win'; fi)" >> $GITHUB_ENV
           echo "EXEKIAS_STORAGEACCOUNT=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekiascanaryghl'; else echo 'exekiascanaryghw'; fi)" >> $GITHUB_ENV
           echo "BIN_NAME=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekias'; else echo 'exekias.exe'; fi)" >> $GITHUB_ENV
       - name: Install NetCDF and bicep compiler
