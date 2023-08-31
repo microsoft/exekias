@@ -37,7 +37,7 @@ jobs:
         run: |
           echo EXEKIAS_RESOURCEGROUP=exekias-canary-github-linux  >> $GITHUB_ENV
           echo EXEKIAS_STORAGEACCOUNT=exekiascanaryghl >> $GITHUB_ENV
-          echo BIN_NAME=exekias
+          echo BIN_NAME=exekias >> $GITHUB_ENV
           sudo apt update
           sudo apt install libnetcdf-dev -y
           curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
