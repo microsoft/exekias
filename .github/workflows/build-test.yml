@@ -27,6 +27,7 @@ jobs:
 
     steps:
       - name: Set conditional env
+        shell: bash
         run: |
           echo "EXEKIAS_STORAGEACCOUNT=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekiascanaryghl'; else echo 'exekiascanaryghw'; fi)" >> $GITHUB_ENV
           echo "BIN_NAME=$(if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then echo 'exekias'; else echo 'exekias.exe'; fi)" >> $GITHUB_ENV
@@ -37,6 +38,7 @@ jobs:
           sudo apt install libnetcdf-dev -y
           curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
           chmod +x ${{ runner.temp }}/bicep
+          echo "BicepPath=${{ runner.temp }}/bicep" >> $GITHUB_ENV
           
       - uses: actions/checkout@v3
       - name: Setup .NET
@@ -81,3 +83,8 @@ jobs:
             azPSVersion: "latest"
         env:
           EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/${{ env.BIN_NAME }}
+      - name: Clean up deployment
+        uses: azure/powershell@v1
+        with:
+          azPSVersion: latest
+          inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
