@@ -83,7 +83,12 @@ jobs:
         uses: azure/powershell@v1
         with:
           azPSVersion: latest
-          inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}      
+          inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
+# Note the above cleanup which takes up to ~ 10 min should run separately from the canary test below.
+# If not, the exekias utility tries to re-use initial shared credential from disk that is configured
+# with federated token from GitHub. By that time the token is already expired and authentication fails, e.g.:
+# ERROR: AADSTS700024: Client assertion is not within its valid time range. Current time: 2023-08-31T12:53:38.8354271Z, assertion valid from 2023-08-31T12:43:06.0000000Z, expiry time of assertion 2023-08-31T12:48:06.0000000Z.
+# The cleanup script above must have flushed the renewed token to disk when the pwsh process stops.
       - name: Run canary test
         uses: azure/powershell@v1
         with:

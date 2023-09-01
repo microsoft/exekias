@@ -12,11 +12,11 @@ Write-Host "[$(Get-Date)] Deleting ALL resources in resource group $resourceGrou
 
 Set-AzContext -Subscription $subscription | Out-Null
 
-# Delete Function Apps first together with their App Service Plans
+# Delete Function Apps first to unblock App Service Plans
 $apps = Get-AzWebApp -ResourceGroupName $resourceGroup
 if ($apps) {
-    Write-Host "[$(Get-Date)] Deleting Function Apps $($apps | Select-Object -ExpandProperty Name | Join-String -Separator ', ')..."
-    $jobs = $apps | Remove-AzWebApp -AsJob -Force -ErrorAction Continue
+    Write-Host "[$(Get-Date)] Deleting web apps $($apps | Select-Object -ExpandProperty Name | Join-String -Separator ', ')..."
+    $jobs = $apps | Remove-AzResource -AsJob -Force -ErrorAction Continue
     Receive-Job $jobs -AutoRemoveJob -Wait
 }
 
@@ -35,7 +35,7 @@ while (((Get-Date) -lt $timeout) -and (Get-AzResource -ResourceGroupName $resour
 }
 $resources_left = Get-AzResource -ResourceGroupName $resourceGroup
 if ($resources_left) {
-    Write-Host $resources_left
+    $resources_left
     Write-Error "[$(Get-Date)] Resource group is not empty"
     exit 1
 }
