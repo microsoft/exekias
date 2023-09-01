@@ -16,7 +16,7 @@ Set-AzContext -Subscription $subscription | Out-Null
 $apps = Get-AzWebApp -ResourceGroupName $resourceGroup
 if ($apps) {
     Write-Host "[$(Get-Date)] Deleting Function Apps $($apps | Select-Object -ExpandProperty Name | Join-String -Separator ', ')..."
-    $jobs = $apps | Remove-AzWebApp -AsJob -DeleteAppServicePlan -Force
+    $jobs = $apps | Remove-AzWebApp -AsJob -Force -ErrorAction Continue
     Receive-Job $jobs -AutoRemoveJob -Wait
 }
 
@@ -24,12 +24,12 @@ if ($apps) {
 $resources = Get-AzResource -ResourceGroupName $resourceGroup
 if ($resources) {
     Write-Host "[$(Get-Date)] Deleting $($resources.Length) other resources..."
-    $jobs = $resources | Remove-AzResource -AsJob -Force
+    $jobs = $resources | Remove-AzResource -AsJob -Force -ErrorAction Continue 
     Receive-Job $jobs -AutoRemoveJob -Wait
 }
 
 # Wait until ARM reports the resource group is empty
-$timeout = (Get-Date) + (New-TimeSpan -Seconds 60)
+$timeout = (Get-Date) + (New-TimeSpan -Minutes 10)
 while (((Get-Date) -lt $timeout) -and (Get-AzResource -ResourceGroupName $resourceGroup)) {
     Start-Sleep -Seconds 1
 }
