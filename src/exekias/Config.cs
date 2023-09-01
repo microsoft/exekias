@@ -25,12 +25,12 @@ record ExekiasConfig(
 
 partial class Program
 {
-    static TokenCredential credential = new AzurePowerShellCredential(); // Azure.Identity.DefaultAzureCredential(
-        // new DefaultAzureCredentialOptions() {
-        //     ExcludeInteractiveBrowserCredential = false,
-        //     ExcludeManagedIdentityCredential = true,
-        //     ExcludeWorkloadIdentityCredential = true
-        // });
+    static TokenCredential credential = new Azure.Identity.DefaultAzureCredential(
+        new DefaultAzureCredentialOptions() {
+            ExcludeInteractiveBrowserCredential = false,
+            ExcludeManagedIdentityCredential = true,
+            ExcludeWorkloadIdentityCredential = true
+        });
     static Lazy<ArmClient> arm = new(() => new(credential));
 
     static void Error(IConsole console, string message)

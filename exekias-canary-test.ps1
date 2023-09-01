@@ -39,12 +39,6 @@ if (Test-Path ~/.exekias.json) {
     Remove-Item ~/.exekias.json -Force
 }
 
-Write-Host "[$(Get-Date)] Starting canary test."
-.\cleanup_resource_group.ps1 $subscription $resourceGroup
-if (-not $?) {
-    exit $LASTEXITCODE
-}
-
 Write-Host "[$(Get-Date)] Start deployment of backend..."
 $context = Set-AzContext -Subscription $subscription
 & $exekias backend deploy --subscription $context.Subscription --resourcegroup $resourceGroup --storageaccount $storageAccount
