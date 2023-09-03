@@ -14,12 +14,22 @@
 # - Retrieval of metadata object.
 # - Wait until postprocessing of the run completes and check appropriate changes to teh run metadata.
 #
-$params = Get-Content "~/exekias-canary-test.json" | ConvertFrom-Json
+$paramsFile = "~/exekias-canary-test.json"
+if (Test-Path $paramsFile){
 
-$subscription = $params.subscription
-$resourceGroup = $params.resourceGroup
-$storageAccount = $params.storageAccount
-$exekias = $params.exekiasPath
+    $params = Get-Content  | ConvertFrom-Json
+    
+    $subscription = $params.subscription
+    $resourceGroup = $params.resourceGroup
+    $storageAccount = $params.storageAccount
+    $exekias = $params.exekiasPath
+}
+else {
+    $subscription = $env:EXEKIAS_SUBSCRIPTION
+    $resourceGroup =  $env:EXEKIAS_RESOURCEGROUP
+    $storageAccount = $env:EXEKIAS_STORAGEACCOUNT
+    $exekias = $env:EXEKIAS_BIN
+}
 
 if (-not (Test-Path $exekias)) {
     Write-Error "$exekias not found."
@@ -27,12 +37,6 @@ if (-not (Test-Path $exekias)) {
 }
 if (Test-Path ~/.exekias.json) {
     Remove-Item ~/.exekias.json -Force
-}
-
-Write-Host "[$(Get-Date)] Starting canary test."
-.\cleanup_resource_group.ps1 $subscription $resourceGroup
-if (-not $?) {
-    exit $LASTEXITCODE
 }
 
 Write-Host "[$(Get-Date)] Start deployment of backend..."

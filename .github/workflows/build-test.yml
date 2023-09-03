@@ -1,5 +1,4 @@
-# This workflow will build a .NET project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-net
+# Build "publish" target, run unit tests and finally canary test
 
 name: CI
 
@@ -11,38 +10,108 @@ on:
 
 env:
   URL_NETCDF_WIN: https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netCDF4.9.2-NC4-64.exe
-
+permissions:
+  id-token: write
 jobs:
-  build:
+  build_test:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
 
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+
+    env:
+      EXEKIAS_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      EVENT_NAME: ${{ github.event_name }}
+      NOT_PR_FROM_PUBLIC_FORK: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository || github.event.pull_request.head.repo.private }}
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: 6.0.x
-    - name: Build
-      run: |
-        dotnet build src/exekias
-        dotnet build src/Exekias.AzureFunctions
-        dotnet build src/Exekias.DataImport
-    - name: Download NetCDF
-      shell: pwsh
-      run: |
-        Invoke-WebRequest $env:URL_NETCDF_WIN -OutFile ${{ runner.temp }}\netcdf.exe
-        7z x ${{ runner.temp }}\netcdf.exe bin/*.dll -o${{ runner.temp }} -y
-        Get-ChildItem ${{ runner.temp }}\bin
-    - name: Start azurite
-      shell: bash
-      run: |
-        npm install -g azurite
-        azurite --silent --location ${{ runner.temp }}\azurite --debug ${{ runner.temp }}\azurite.log --blobHost &
-    - name: Test
-      run: |
-        dotnet test --verbosity normal src/Exekias.Core.Tests
-        dotnet test --verbosity normal src/Exekias.SDS.Tests
-        dotnet test --verbosity normal src/Exekias.AzureStorageEmulator.Tests
-      env:
-        LIBNETCDFPATH: ${{ runner.temp }}\bin\netcdf.dll
+      - name: Windows specific setup
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          echo EXEKIAS_RESOURCEGROUP=exekias-canary-github-win  >> $GITHUB_ENV
+          echo EXEKIAS_STORAGEACCOUNT=exekiascanaryghw >> $GITHUB_ENV
+          echo BIN_NAME=exekias.exe >> $GITHUB_ENV
+      - name: Linux specific setup
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          echo EXEKIAS_RESOURCEGROUP=exekias-canary-github-linux  >> $GITHUB_ENV
+          echo EXEKIAS_STORAGEACCOUNT=exekiascanaryghl >> $GITHUB_ENV
+          echo BIN_NAME=exekias >> $GITHUB_ENV
+          sudo apt update
+          sudo apt install libnetcdf-dev -y
+          curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x ${{ runner.temp }}/bicep
+          echo "BicepPath=${{ runner.temp }}/bicep" >> $GITHUB_ENV
+          
+      - uses: actions/checkout@v3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 6.0.x
+      - name: Download NetCDF
+        shell: pwsh
+        run: |
+          Invoke-WebRequest $env:URL_NETCDF_WIN -OutFile ${{ runner.temp }}/netcdf.exe
+          7z x ${{ runner.temp }}/netcdf.exe bin/*.dll -o${{ runner.temp }} -y
+          Get-ChildItem ${{ runner.temp }}/bin
+      - name: Build
+        run: |
+          dotnet publish src/exekias -c Release
+        env:
+          LIBNETCDFPATH: ${{ runner.temp }}/bin/netcdf.dll
+      - name: Start azurite
+        shell: bash
+        run: |
+          npm install -g azurite
+          azurite --silent --location ${{ runner.temp }}/azurite --debug ${{ runner.temp }}/azurite.log --blobHost &
+      - name: Test
+        run: |
+          dotnet test --verbosity normal src/Exekias.Core.Tests
+          dotnet test --verbosity normal src/Exekias.SDS.Tests
+          dotnet test --verbosity normal src/Exekias.AzureStorageEmulator.Tests
+        env:
+          LIBNETCDFPATH: ${{ runner.temp }}/bin/netcdf.dll
+
+      # OpenID Connect token is not available for pull requests from public forked repositories.
+      # See https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token,
+      # id-token scope.
+      - name: Login via Az module
+        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      # Note the cleanup which takes up to ~ 10 min and the canary test that follows it should run in separate tasks.
+      # If not, the exekias utility tries to re-use initial shared credential from disk that is configured
+      # with OpenID Connect token from GitHub. By that time the token is already expired and authentication fails, e.g.:
+      # ERROR: AADSTS700024: Client assertion is not within its valid time range. Current time: 2023-08-31T12:53:38.8354271Z, assertion valid from 2023-08-31T12:43:06.0000000Z, expiry time of assertion 2023-08-31T12:48:06.0000000Z.
+      # When the pwsh process runs the cleanup script and stops, it flushes the renewed token to disk. The renewed token is valid for 1 hour.
+      - name: Clean up deployment
+        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
+        uses: azure/powershell@v1
+        with:
+          azPSVersion: latest
+          inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
+      - name: Run canary test
+        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
+        uses: azure/powershell@v1
+        with:
+            inlineScript: |
+              ./exekias-canary-test.ps1
+            azPSVersion: "latest"
+        env:
+          EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/${{ env.BIN_NAME }}
+      - name: Clean up deployment
+        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
+        uses: azure/powershell@v1
+        with:
+          azPSVersion: latest
+          errorActionPreference: continue
+          inlineScript: |
+            ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
+            exit 0
