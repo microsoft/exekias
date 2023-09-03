@@ -15,6 +15,7 @@ Set-AzContext -Subscription $subscription | Out-Null
 function Remove-ResourceUntilAbsent
 {
     process{
+        # input object must be an Azure Resource Id
         Start-Job -ArgumentList $_  -ScriptBlock {
             param($ResourceId)
             Remove-AzResource -ResourceId $ResourceId -Force | Out-Null
