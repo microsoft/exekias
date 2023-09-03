@@ -22,6 +22,11 @@ jobs:
 
     env:
       EXEKIAS_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      EVENT_NAME: ${{ github.event_name }}
+      PR_REPO_PRIVATE: ${{ github.event.pull_request.head.repo.private }}
+      PR_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+      PR_FROM_FORK: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      PR_FROM_PUBLIC_FORK: ${{ github.event.pull_request.head.repo.private || github.event.pull_request.head.repo.full_name == github.repository }}
       NOT_PR_FROM_PUBLIC_FORK: ${{ github.event_name != 'pull_request' || !(github.event.pull_request.head.repo.private || github.event.pull_request.head.repo.full_name == github.repository) }}
 
     steps:
