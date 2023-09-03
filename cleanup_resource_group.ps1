@@ -12,11 +12,21 @@ Write-Host "[$(Get-Date)] Deleting ALL resources in resource group $resourceGrou
 
 Set-AzContext -Subscription $subscription | Out-Null
 
+function Remove-ResourceUntilAbsent($resourceId){
+    Remove-AzResource -ResourceId $resourceId -Force
+    while (Get-AzResource -ResourceId $resourceId -ErrorAction SilentlyContinue){
+        Write-Information "Retry: $resourceId"
+        Start-Sleep -Seconds 10
+        Remove-AzResource -ResourceId $resourceId -Force
+    }
+    $resourceId
+}
+
 # Delete Function Apps first to unblock App Service Plans
 $apps = Get-AzWebApp -ResourceGroupName $resourceGroup
 if ($apps) {
     Write-Host "[$(Get-Date)] Deleting web apps $($apps | Select-Object -ExpandProperty Name | Join-String -Separator ', ')..."
-    $jobs = $apps | Remove-AzResource -AsJob -Force -ErrorAction Continue
+    $jobs = $apps | ForEach-Object {Start-Job {Remove-ResourceUntilAbsent $_.ResourceId}}
     Receive-Job $jobs -AutoRemoveJob -Wait
 }
 
@@ -24,7 +34,7 @@ if ($apps) {
 $resources = Get-AzResource -ResourceGroupName $resourceGroup
 if ($resources) {
     Write-Host "[$(Get-Date)] Deleting $($resources.Length) other resources..."
-    $jobs = $resources | Remove-AzResource -AsJob -Force -ErrorAction Continue 
+    $jobs = $resources | ForEach-Object {Start-Job {Remove-ResourceUntilAbsent $_.ResourceId}}
     Receive-Job $jobs -AutoRemoveJob -Wait
 }
 
