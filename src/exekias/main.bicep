@@ -76,6 +76,9 @@ resource syncApp 'Microsoft.Web/sites@2022-09-01' = {
     properties: {
         siteConfig: {
             use32BitWorkerProcess: false
+            remoteDebuggingEnabled: false
+            minTlsVersion: '1.2'
+            ftpsState: 'FtpsOnly'
             appSettings: [
                 {
                     name: 'AzureWebJobsStorage'

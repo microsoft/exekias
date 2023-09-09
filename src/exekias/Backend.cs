@@ -64,7 +64,7 @@ partial class Program
         return result;
     }
 
-    static void DeployComponents(ResourceGroupResource resourceGroup, StorageAccountResource runStore, string containerName, IConsole console)
+    static void DeployComponents(ResourceGroupResource resourceGroup, StorageAccountResource runStore, string containerName, string deploymentName, IConsole console)
     {
         //
         // Assumes the directory contains packages 'sync.zip', 'fetch.zip' and 'tables.zip'.
@@ -83,7 +83,8 @@ partial class Program
         if (dontExist.Length > 0) { throw new InvalidOperationException($"Cannot find the following file(s): {dontExist}"); }
 
         // Deploy ARM resources using template file
-        ArmDeploymentResource deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed, "exekias",
+        ArmDeploymentResource deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed, 
+            deploymentName,
             new ArmDeploymentContent(
                 new ArmDeploymentProperties(ArmDeploymentMode.Incremental)
                 {
@@ -220,8 +221,9 @@ partial class Program
                     blobContainerName = AskBlobContainerName(null, storageAccount, console);
                 }
             }
-            console.WriteLine($"Start deployment of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
-            DeployComponents(resourceGroup, storageAccount, blobContainerName, console);
+            var deploymentName = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            console.WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
+            DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName, console);
             return 0;
         }
         catch (InvalidOperationException ex)

@@ -38,7 +38,7 @@ partial class Program
 
     static DateTimeOffset BlobLastWriteTime(BlobProperties blobProperties)
     {
-        if (blobProperties.Metadata.TryGetValue(LAST_WRITE_TIME, out string value))
+        if (blobProperties.Metadata.TryGetValue(LAST_WRITE_TIME, out string? value) && value != null)
         {
             var secondsSinceEpoch = double.Parse(value);
             return DateTimeOffset.FromUnixTimeMilliseconds((long)Math.Round(secondsSinceEpoch * 1000));
