@@ -1,12 +1,12 @@
 ################################################################
 # WARNING: the script deletes ALL resources in a resource group
 ################################################################
-if ($args.Length -lt 2) {
-    Write-Host "Usage: ./cleanup_resource_group.ps1 <subscription> <resourceGroup>"
-    exit 1
-}
-$subscription = $args[0]
-$resourceGroup = $args[1]
+Param(
+    [Parameter(Mandatory, HelpMessage="Azure subscription name.")][string]
+    $subscription,
+    [Parameter(Mandatory, HelpMessage="Azure resource group name.")][string]
+    $resourceGroup
+)
 
 Write-Host "[$(Get-Date)] Deleting ALL resources in resource group $resourceGroup in $subscription..."
 
