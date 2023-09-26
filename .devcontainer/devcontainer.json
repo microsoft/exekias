@@ -1,0 +1,9 @@
+{
+	"image": "mcr.microsoft.com/devcontainers/universal:2",
+	"features": {
+		"ghcr.io/rchaganti/vsc-devcontainer-features/azurebicep:1": {}
+	},
+	"containerEnv": {
+		"BicepPath": "/usr/local/bin/bicep"
+	}
+}
