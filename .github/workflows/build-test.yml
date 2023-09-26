@@ -90,13 +90,22 @@ jobs:
       # If not, the exekias utility tries to re-use initial shared credential from disk that is configured
       # with OpenID Connect token from GitHub. By that time the token is already expired and authentication fails, e.g.:
       # ERROR: AADSTS700024: Client assertion is not within its valid time range. Current time: 2023-08-31T12:53:38.8354271Z, assertion valid from 2023-08-31T12:43:06.0000000Z, expiry time of assertion 2023-08-31T12:48:06.0000000Z.
-      # When the pwsh process runs the cleanup script and stops, it flushes the renewed token to disk. The renewed token is valid for 1 hour.
       - name: Clean up deployment
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/powershell@v1
         with:
           azPSVersion: latest
           inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
+
+      - name: Login via Az module
+        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
       - name: Run canary test
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/powershell@v1
@@ -106,6 +115,7 @@ jobs:
             azPSVersion: "latest"
         env:
           EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/${{ env.BIN_NAME }}
+          
       - name: Clean up deployment
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/powershell@v1

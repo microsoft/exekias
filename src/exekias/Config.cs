@@ -1,4 +1,5 @@
-﻿using Azure.Core;
+﻿using Azure;
+using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.AppService;
@@ -8,6 +9,7 @@ using Azure.ResourceManager.EventGrid.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
+using System;
 using System.CommandLine;
 using System.CommandLine.IO;
 using System.Text.Json;
@@ -26,7 +28,8 @@ record ExekiasConfig(
 partial class Program
 {
     static TokenCredential credential = new Azure.Identity.DefaultAzureCredential(
-        new DefaultAzureCredentialOptions() {
+        new DefaultAzureCredentialOptions()
+        {
             ExcludeInteractiveBrowserCredential = false,
             ExcludeManagedIdentityCredential = true,
             ExcludeWorkloadIdentityCredential = true
@@ -203,9 +206,10 @@ partial class Program
         return all[chosen];
     }
 
-    static StorageAccountResource CreateNewStorageAccount(string name, ResourceGroupResource resourceGroup)
+    static StorageAccountResource CreateNewStorageAccount(string name, ResourceGroupResource resourceGroup, IConsole console)
     {
-        return resourceGroup.GetStorageAccounts().CreateOrUpdate(Azure.WaitUntil.Completed,
+        console.WriteLine($"Creating storage account {name} in {resourceGroup.Id.Name}.");
+        var account = resourceGroup.GetStorageAccounts().CreateOrUpdate(Azure.WaitUntil.Completed,
             name,
             new StorageAccountCreateOrUpdateContent(
                 new StorageSku("Standard_LRS"),
@@ -216,6 +220,27 @@ partial class Program
                 AllowBlobPublicAccess = false
             }
             ).Value;
+        // retry until BlobService available on the account
+        bool succeeded = false;
+        while (!succeeded)
+        {
+            try
+            {
+                account.GetBlobService().Get();
+                succeeded = true;
+            }
+            catch (RequestFailedException e)
+            {
+                if (e.Status == 404)
+                {
+                    console.WriteLine("Blob service not available yet, retry in 10 s.");
+                    Thread.Sleep(10_000);
+                }
+                else { throw; }
+            }
+
+        }
+        return account;
     }
 
     static StorageAccountResource AskStorageAccount(string? storageAccountName, ResourceGroupResource resourceGroup, bool createIfNotExists, IConsole console)
@@ -231,7 +256,7 @@ partial class Program
             {
                 if (createIfNotExists)
                 {
-                    return CreateNewStorageAccount(storageAccountName, resourceGroup);
+                    return CreateNewStorageAccount(storageAccountName, resourceGroup, console);
                 }
                 throw new InvalidOperationException($"{storageAccountName} does not exist in resource group {resourceGroup.Data.Name}");
             }
@@ -263,7 +288,7 @@ partial class Program
                 }
                 try
                 {
-                    result = CreateNewStorageAccount(name, resourceGroup);
+                    result = CreateNewStorageAccount(name, resourceGroup, console);
                 }
                 catch (Azure.RequestFailedException ex) when (ex.Status == 409 && ex.ErrorCode == "StorageAccountAlreadyTaken")
                 {
