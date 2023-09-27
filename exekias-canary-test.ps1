@@ -149,7 +149,7 @@ finally {
 } 
 
 Write-Host "[$(Get-Date)] Query for runs..."
-$runs = & $exekias query --json | ConvertFrom-Json
+$runs = & $exekias runs query --json | ConvertFrom-Json
 if (($runs.Count -ne 1) -or ($runs[0].run -ne "12345678-123456-samples") -or ($runs.params.TestKey -ne "test value")) {
     Write-Error "Query failed."
     exit 1
@@ -167,7 +167,7 @@ if ($batchtaskstate -ne "Completed") {
 }
 Write-Host "[$(Get-Date)] Checking batch task execution result:"
 (Get-AzBatchTask -JobId exekias -BatchContext $batch).ExecutionInformation | Select-Object Result, FailureInformation
-$runs = & $exekias query --json | ConvertFrom-Json
+$runs = & $exekias runs show "12345678-123456-samples" | ConvertFrom-Json
 if (-not ($runs.Variables.CSV -and ($runs.Variables.CSV[0] -eq "columnTitle"))) {
     Write-Error "Run metadata doesn't have updated information about data columns."
     exit 1

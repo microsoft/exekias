@@ -32,7 +32,10 @@ configCreateCommand.SetHandler(ctx => DoConfigCreate(
     ctx.Console));
 configCommand.AddCommand(configCreateCommand);
 
-// query [<query>] -- query runs that match specified criteria.
+// runs
+var runsCommand = new Command("runs", "Query and manage runs metadata.");
+rootCommand.AddCommand(runsCommand);
+// runs query [<query>] -- query runs that match specified criteria.
 var queryCommand = new Command("query", "Query Runs that match specified criteria.");
 var queryArgument = new Argument<string>("query", () => "", "The query to perform. This is the WHERE part of CosmosDB query \"SELECT * FROM run WHERE ...\". Examples: \"run.date <= '202301'\" or \"STARTSWITH(run.date, '202301')\"");
 queryCommand.AddArgument(queryArgument);
@@ -44,8 +47,7 @@ var queryTopOption = new Option<int>("--top", () => 10, "Limit the number of res
 queryCommand.AddOption(queryTopOption);
 var queryJsonOption = new Option<bool>("--json", "Output results in JSON format.");
 queryCommand.AddOption(queryJsonOption);
-queryCommand.SetHandler(async ctx => await DoQuery(
-    ctx,
+queryCommand.SetHandler(async ctx => ctx.ExitCode = await DoQuery(
     ctx.ParseResult.GetValueForOption(configOption),
     ctx.ParseResult.GetValueForArgument(queryArgument),
     ctx.ParseResult.GetValueForOption(queryOrderByOption) ?? "lastWriteTime",
@@ -53,7 +55,15 @@ queryCommand.SetHandler(async ctx => await DoQuery(
     ctx.ParseResult.GetValueForOption(queryTopOption),
     ctx.ParseResult.GetValueForOption(queryJsonOption),
     ctx.Console));
-rootCommand.AddCommand(queryCommand);
+runsCommand.AddCommand(queryCommand);
+// runs show <run>
+var runsShowCommand = new Command("show", "Show metadata for the run.");
+var runsShowArgument = new Argument<string>("run", "Run identifier.");
+runsShowCommand.AddArgument(runsShowArgument);
+runsShowCommand.SetHandler(async ctx => ctx.ExitCode = await DoShow(
+    ctx.ParseResult.GetValueForOption(configOption),
+    ctx.ParseResult.GetValueForArgument(queryArgument),
+    ctx.Console));
 
 // data
 var dataCommand = new Command("data", "Manage data files.");
