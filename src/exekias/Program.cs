@@ -62,8 +62,9 @@ var runsShowArgument = new Argument<string>("run", "Run identifier.");
 runsShowCommand.AddArgument(runsShowArgument);
 runsShowCommand.SetHandler(async ctx => ctx.ExitCode = await DoShow(
     ctx.ParseResult.GetValueForOption(configOption),
-    ctx.ParseResult.GetValueForArgument(queryArgument),
+    ctx.ParseResult.GetValueForArgument(runsShowArgument),
     ctx.Console));
+runsCommand.AddCommand(runsShowCommand);
 
 // data
 var dataCommand = new Command("data", "Manage data files.");
