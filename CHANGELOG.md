@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `exekias query ...` command is now `exekias runs query ...`.
   It doesn't show hidden runs by default.
+  `exekias query ... --hidden` command shows only hidden runs instead.
 
 ### Added
 - `exekias runs show <run>` command to print run metadata.

@@ -49,6 +49,8 @@ var queryTopOption = new Option<int>("--top", () => 10, "Limit the number of res
 queryCommand.AddOption(queryTopOption);
 var queryJsonOption = new Option<bool>("--json", "Output results in JSON format.");
 queryCommand.AddOption(queryJsonOption);
+var queryHiddenOption = new Option<bool>("--hidden", "Return hidden runs so that they can be unhidden.");
+queryCommand.AddOption(queryHiddenOption);
 queryCommand.SetHandler(async ctx => ctx.ExitCode = await DoQuery(
     ctx.ParseResult.GetValueForOption(configOption),
     ctx.ParseResult.GetValueForArgument(queryArgument),
@@ -56,6 +58,7 @@ queryCommand.SetHandler(async ctx => ctx.ExitCode = await DoQuery(
     ctx.ParseResult.GetValueForOption(queryOrderAscendingOption),
     ctx.ParseResult.GetValueForOption(queryTopOption),
     ctx.ParseResult.GetValueForOption(queryJsonOption),
+    ctx.ParseResult.GetValueForOption(queryHiddenOption),
     ctx.Console));
 runsCommand.AddCommand(queryCommand);
 // runs show <run>

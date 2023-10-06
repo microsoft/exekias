@@ -15,6 +15,7 @@ partial class Program
         bool orderAscending,
         int top,
         bool jsonOutput,
+        bool isHidden,
         IConsole console)
     {
         var cfg = LoadConfig(cfgFile, console);
@@ -33,7 +34,7 @@ partial class Program
                 .AddFilter("Exekias.CosmosDB", LogLevel.Error)
                 .AddConsole();
         }).CreateLogger<ExekiasStore>());
-        var result = await exekiasStore.QueryMetaObjects(query, orderBy.StartsWith("run.") ? orderBy.Substring(4) : orderBy, orderAscending, top)
+        var result = await exekiasStore.QueryMetaObjects(query, orderBy.StartsWith("run.") ? orderBy.Substring(4) : orderBy, orderAscending, top, isHidden)
             .ToArrayAsync();
         if (jsonOutput)
         {
