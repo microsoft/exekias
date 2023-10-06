@@ -82,4 +82,33 @@ partial class Program
         }
         return 0;
     }
+
+    static async Task<int> DoHide(
+        FileInfo? cfgFile,
+        string runId,
+        bool unhide,
+        IConsole console)
+    {
+        var cfg = LoadConfig(cfgFile, console);
+        if (cfg == null)
+        {
+            return 1;
+        }
+        var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
+        {
+            ConnectionString = cfg.exekiasStoreConnectionString,
+            DatabaseName = cfg.exekiasStoreDatabaseName,
+            ContainerName = cfg.exekiasStoreContainerName
+        }), LoggerFactory.Create(builder =>
+        {
+            builder
+                .AddFilter("Exekias.CosmosDB", LogLevel.Error)
+                .AddConsole();
+        }).CreateLogger<ExekiasStore>());
+        if (!await exekiasStore.SetHidden(runId, !unhide))
+        {
+            Error(console, $"Run '{runId}' cannot be found.");
+        }
+        return 0;
+    }
 }

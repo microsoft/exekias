@@ -8,10 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- `exekias query ...` command is now `exekias runs query ...`
+- `exekias query ...` command is now `exekias runs query ...`.
+  It doesn't show hidden runs by default.
 
 ### Added
 - `exekias runs show <run>` command to print run metadata.
+- `exekias runs hide <run> [--unhide]` command to hide/unhide runs.
 
 
 ## [2.0.5] - 2023-09-26

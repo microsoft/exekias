@@ -52,8 +52,18 @@ namespace Exekias.Core
         /// <param name="orderBy">Property name to order the sequence. The default is an empty string, no ordering.</param>
         /// <param name="orderAscending">True if order should be ascending, otherwise the order is descending. The default is <c>true</c>.</param>
         /// <param name="top">Maximum number of elements to return. Set to <c>0</c> or negative to return all values.</param>
+        /// <param name="isHidden">If true, returns hidden objects. Otherwise, returns objects which are not hidden.</param>
         /// <returns></returns>
-        IAsyncEnumerable<ExekiasObject> QueryMetaObjects(string where, string orderBy, bool orderAscending, int top);
+        IAsyncEnumerable<ExekiasObject> QueryMetaObjects(string where, string orderBy, bool orderAscending, int top, bool isHidden = false);
+
+        /// <summary>
+        /// Make the metadata object hidden or not hidden. Hidden objects do not show up in query results by default.
+        /// </summary>
+        /// <param name="runId">Path to a run directory.</param>
+        /// <param name="isHidden">The target hidden state.</param>
+        /// <returns><c>false</c> if the objectis not found.</returns>
+
+        ValueTask<bool> SetHidden(string runId, bool isHidden);
     }
 
     /// <summary>
