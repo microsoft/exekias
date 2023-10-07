@@ -17,7 +17,7 @@
 $paramsFile = "~/exekias-canary-test.json"
 if (Test-Path $paramsFile){
 
-    $params = Get-Content  | ConvertFrom-Json
+    $params = Get-Content $paramsFile | ConvertFrom-Json
     
     $subscription = $params.subscription
     $resourceGroup = $params.resourceGroup
@@ -152,6 +152,18 @@ Write-Host "[$(Get-Date)] Query for runs..."
 $runs = & $exekias runs query --json | ConvertFrom-Json
 if (($runs.Count -ne 1) -or ($runs[0].run -ne "12345678-123456-samples") -or ($runs.params.TestKey -ne "test value")) {
     Write-Error "Query failed."
+    exit 1
+}
+
+Write-Host "[$(Get-Date)] Check hiding/unhiding runs..."
+& $exekias runs hide "12345678-123456-samples"
+if (((& $exekias runs query) -contains "12345678-123456-samples") -or -not ((& $exekias runs query --hidden) -contains "12345678-123456-samples")) {
+    Write-Error "Hiding failed."
+    exit 1
+}
+& $exekias runs hide "12345678-123456-samples" --unhide
+if (-not ((& $exekias runs query) -contains "12345678-123456-samples") -or ((& $exekias runs query --hidden) -contains "12345678-123456-samples")) {
+    Write-Error "Unhiding failed."
     exit 1
 }
 
