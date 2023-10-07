@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2023-10-07
+
 ### Changed
 - `exekias query ...` command is now `exekias runs query ...`.
   It doesn't show hidden runs by default.
