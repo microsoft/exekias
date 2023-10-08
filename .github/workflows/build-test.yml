@@ -12,6 +12,9 @@ env:
   URL_NETCDF_WIN: https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netCDF4.9.2-NC4-64.exe
 permissions:
   id-token: write
+# since we deploy test instances to pre-existing Azure resource groups
+# we cannot run multiple instances of the workflow in parallel
+concurrency: build_test
 jobs:
   build_test:
     strategy:

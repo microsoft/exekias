@@ -90,9 +90,11 @@ namespace Exekias.Core
             return new ValueTask();  // completed ValueTask
         }
 
-        public IAsyncEnumerable<ExekiasObject> QueryMetaObjects(string where, string orderBy, bool orderAscending, int top)
+        public IAsyncEnumerable<ExekiasObject> QueryMetaObjects(string where, string orderBy, bool orderAscending, int top, bool isHidden = false)
         {
             throw new NotImplementedException();
         }
+
+        public ValueTask<bool> SetHidden(string runId, bool isHidden) => throw new NotImplementedException();
     }
 }

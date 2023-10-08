@@ -3,10 +3,12 @@
 
 var rootCommand = new RootCommand("Exekias configuration");
 var configOption = new Option<FileInfo>(
-    "--config",
+    new[]{"--config", "-c"},
     () => new FileInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".exekias.json")),
     "Configuration file path.");
 rootCommand.AddGlobalOption(configOption);
+
+var runIdArgument = new Argument<string>("run", "Run identifier.");
 
 // config -- show current configuration
 var configCommand = new Command("config", "Manage local exekias configuration settings.");
@@ -15,9 +17,9 @@ rootCommand.AddCommand(configCommand);
 
 // config create -- create a new configuration file.
 var configCreateCommand = new Command("create", "Create a new configuration file");
-var azureSubscriptionOption = new Option<string?>("--subscription", "Azure subscription name or identifier.");
+var azureSubscriptionOption = new Option<string?>(new[]{"--subscription", "-s"}, "Azure subscription name or identifier.");
 configCreateCommand.AddOption(azureSubscriptionOption);
-var resourceGroupOption = new Option<string?>("--resourcegroup", "Azure resource group name.");
+var resourceGroupOption = new Option<string?>(new[]{"--resourcegroup", "-g"}, "Azure resource group name.");
 configCreateCommand.AddOption(resourceGroupOption);
 var storageAccountOption = new Option<string?>("--storageaccount", "Azure storage account name.");
 configCreateCommand.AddOption(storageAccountOption);
@@ -32,7 +34,10 @@ configCreateCommand.SetHandler(ctx => DoConfigCreate(
     ctx.Console));
 configCommand.AddCommand(configCreateCommand);
 
-// query [<query>] -- query runs that match specified criteria.
+// runs
+var runsCommand = new Command("runs", "Query and manage runs metadata.");
+rootCommand.AddCommand(runsCommand);
+// runs query [<query>] -- query runs that match specified criteria.
 var queryCommand = new Command("query", "Query Runs that match specified criteria.");
 var queryArgument = new Argument<string>("query", () => "", "The query to perform. This is the WHERE part of CosmosDB query \"SELECT * FROM run WHERE ...\". Examples: \"run.date <= '202301'\" or \"STARTSWITH(run.date, '202301')\"");
 queryCommand.AddArgument(queryArgument);
@@ -44,16 +49,37 @@ var queryTopOption = new Option<int>("--top", () => 10, "Limit the number of res
 queryCommand.AddOption(queryTopOption);
 var queryJsonOption = new Option<bool>("--json", "Output results in JSON format.");
 queryCommand.AddOption(queryJsonOption);
-queryCommand.SetHandler(async ctx => await DoQuery(
-    ctx,
+var queryHiddenOption = new Option<bool>("--hidden", "Return hidden runs so that they can be unhidden.");
+queryCommand.AddOption(queryHiddenOption);
+queryCommand.SetHandler(async ctx => ctx.ExitCode = await DoQuery(
     ctx.ParseResult.GetValueForOption(configOption),
     ctx.ParseResult.GetValueForArgument(queryArgument),
     ctx.ParseResult.GetValueForOption(queryOrderByOption) ?? "lastWriteTime",
     ctx.ParseResult.GetValueForOption(queryOrderAscendingOption),
     ctx.ParseResult.GetValueForOption(queryTopOption),
     ctx.ParseResult.GetValueForOption(queryJsonOption),
+    ctx.ParseResult.GetValueForOption(queryHiddenOption),
     ctx.Console));
-rootCommand.AddCommand(queryCommand);
+runsCommand.AddCommand(queryCommand);
+// runs show <run>
+var runsShowCommand = new Command("show", "Show metadata for the run.");
+runsCommand.AddCommand(runsShowCommand);
+runsShowCommand.AddArgument(runIdArgument);
+runsShowCommand.SetHandler(async ctx => ctx.ExitCode = await DoShow(
+    ctx.ParseResult.GetValueForOption(configOption),
+    ctx.ParseResult.GetValueForArgument(runIdArgument),
+    ctx.Console));
+// runs hide <run> [--unhide]
+var runsHideCommand = new Command("hide", "Hide a run so that it doesn't show up in serach results");
+runsCommand.AddCommand(runsHideCommand);
+runsHideCommand.AddArgument(runIdArgument);
+var runsHideUnhideOption = new Option<bool>("--unhide", "Unhide the run instead of hiding it.");
+runsHideCommand.AddOption(runsHideUnhideOption);
+runsHideCommand.SetHandler(async ctx => ctx.ExitCode = await DoHide(
+    ctx.ParseResult.GetValueForOption(configOption),
+    ctx.ParseResult.GetValueForArgument(runIdArgument),
+    ctx.ParseResult.GetValueForOption(runsHideUnhideOption),
+    ctx.Console));
 
 // data
 var dataCommand = new Command("data", "Manage data files.");
@@ -62,12 +88,11 @@ rootCommand.AddCommand(dataCommand);
 // data ls <run> -- list data files in a run.
 var dataLsCommand = new Command("ls", "List data files.");
 dataCommand.AddCommand(dataLsCommand);
-var dataLsRunArgument = new Argument<string>("run", "Run identifier.");
-dataLsCommand.AddArgument(dataLsRunArgument);
+dataLsCommand.AddArgument(runIdArgument);
 dataLsCommand.SetHandler(async ctx => await DoDataLs(
     ctx,
     ctx.ParseResult.GetValueForOption(configOption),
-    ctx.ParseResult.GetValueForArgument(dataLsRunArgument),
+    ctx.ParseResult.GetValueForArgument(runIdArgument),
     ctx.Console));
 
 // data upload <path> -- upload a run in a local folder.
@@ -85,14 +110,13 @@ dataCommand.AddCommand(dataUploadCommand);
 
 // data download <run> <path>
 var dataDownloadCommand = new Command("download", "Download a run as a subfolder at the specified path.");
-var dataDownloadRunArgument = new Argument<string>("run", "Run identifier.");
-dataDownloadCommand.AddArgument(dataDownloadRunArgument);
+dataDownloadCommand.AddArgument(runIdArgument);
 var dataDownloadPathArgument = new Argument<string>("path", "A directory path to create the subfolder.");
 dataDownloadCommand.AddArgument(dataDownloadPathArgument);
 dataDownloadCommand.SetHandler(async ctx => await DoDataDownload(
     ctx,
     ctx.ParseResult.GetValueForOption(configOption),
-    ctx.ParseResult.GetValueForArgument(dataDownloadRunArgument),
+    ctx.ParseResult.GetValueForArgument(runIdArgument),
     ctx.ParseResult.GetValueForArgument(dataDownloadPathArgument),
     ctx.Console));
 dataCommand.AddCommand(dataDownloadCommand);

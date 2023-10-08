@@ -271,13 +271,15 @@ namespace Exekias.CosmosDb
         /// <remarks>The <paramref name="where"/> filter expression is a scalar expression of
         /// Azure Cosmos DB SQL query () against input_alias named 'run',
         /// e.g. STARTSWITH(run.params.config, 'alpha-') chooses runs where metadata file contents has a value 'config' starting with 'alpha-'.</remarks>
-        public async IAsyncEnumerable<ExekiasObject> QueryMetaObjects(string where, string orderBy, bool orderAscending, int top)
+        public async IAsyncEnumerable<ExekiasObject> QueryMetaObjects(string where, string orderBy, bool orderAscending, int top, bool isHidden = false)
         {
             logger.LogDebug("Query top {0} meta objects where '{1}' order by '{2}' asc={3}.", top, where, orderBy, orderAscending);
             var container = await containerPromise;
             var builder = new System.Text.StringBuilder("SELECT");
             if (top > 0) builder.Append(" TOP ").Append(top);
-            builder.Append(" * FROM run WHERE run.id = \"$\"");
+            builder.Append(" * FROM run WHERE run.id = \"$\" AND");
+            if (!isHidden) builder.Append(" NOT");
+            builder.Append(" (IS_DEFINED(run.hidden) AND run.hidden)");
             if (!string.IsNullOrWhiteSpace(where)) builder.Append(" AND (").Append(where).Append(")");
             if (!string.IsNullOrWhiteSpace(orderBy))
             {
@@ -290,6 +292,35 @@ namespace Exekias.CosmosDb
             //await foreach (var runObject in response)
             await foreach (var runObject in AsyncEnumerate(response, query))
                 yield return runObject;
+        }
+
+        private static IReadOnlyList<PatchOperation> operationHiddenSet = new PatchOperation[] { PatchOperation.Set("/hidden", true) };
+        private static IReadOnlyList<PatchOperation> operationHiddenUnset = new PatchOperation[] { PatchOperation.Remove("/hidden") };
+        /// <inheritdoc/>
+        public async ValueTask<bool> SetHidden(string runId, bool isHidden)
+        {
+
+            var container = await containerPromise;
+            try
+            {
+                await container.PatchItemAsync<object>("$", new PartitionKey(runId),
+                    isHidden ? operationHiddenSet : operationHiddenUnset,
+                    new PatchItemRequestOptions() { EnableContentResponseOnWrite = false });
+            }
+            catch (CosmosException err)
+            {
+                if (err.StatusCode == HttpStatusCode.NotFound)
+                {
+                    return false;
+                }
+                if (!isHidden && err.StatusCode == HttpStatusCode.BadRequest && err.Message.Contains("is absent"))
+                {
+                    // removing "hidden" property when it doesn't exist results in this CosmosDB error; ignore it.
+                    return true;
+                }
+                throw;
+            }
+            return true;
         }
     }
 
