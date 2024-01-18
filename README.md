@@ -78,14 +78,14 @@ The interactive command may create and connect metadata services to an existing 
 - Install azurite, Azure Storage emulator, https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#install-azurite
 - Run azurite, preferably in a separate terminal
 
-    cd ~/azurite
-    azurite-blob
+        cd ~/azurite
+        azurite-blob
 
 - Run `dotnet test` commands.
 
-    dotnet test src/Exekias.Core.Tests/
-    dotnet test src/Exekias.SDS.Tests/
-    dotnet test src/Exekias.AzureStorageEmulator.Tests/
+        dotnet test src/Exekias.Core.Tests/
+        dotnet test src/Exekias.SDS.Tests/
+        dotnet test src/Exekias.AzureStorageEmulator.Tests/
 
 ## Build command line utility on Linux
 
@@ -97,11 +97,11 @@ The interactive command may create and connect metadata services to an existing 
     - Copy .dll files from the installed binaries, say, `C:\Program Files\netCDF 4.9.2\bin\*.dll` to the Linux machine, say, `~/netcdf/bin`.
 - Run the `dotnet publish` command, e.g.
 
-    BicepPath=/usr/local/bin/bicep LIBNETCDFPATH=~/netcdf/bin/netcdf.dll dotnet publish -c release src/exekias
+        BicepPath=/usr/local/bin/bicep LIBNETCDFPATH=~/netcdf/bin/netcdf.dll dotnet publish -c release src/exekias
 
 - Test the command is running
 
-    ./src/exekias/bin/release/net6.0/exekias -h
+        ./src/exekias/bin/release/net6.0/exekias -h
 
 
 ## Running canary script on Linux
@@ -109,8 +109,8 @@ The interactive command may create and connect metadata services to an existing 
 - Install PowerShell, https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell.
 - Install Azure PowerShell
 
-    pwsh>Install-Module az
+        pwsh>Install-Module az
 
 - Login to Azure with your account
 
-    pwsh> Login-AzAccount
+        pwsh> Login-AzAccount
