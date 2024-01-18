@@ -74,6 +74,7 @@ resource syncApp 'Microsoft.Web/sites@2022-09-01' = {
     location: location
     kind: 'functionapp'
     properties: {
+        httpsOnly: true
         siteConfig: {
             use32BitWorkerProcess: false
             remoteDebuggingEnabled: false
