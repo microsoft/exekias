@@ -84,7 +84,7 @@ The interactive command may create and connect metadata services to an existing 
 - Run `dotnet test` commands.
 
     dotnet test src/Exekias.Core.Tests/
-    dotnet test src/Exekias.Core.Tests/
+    dotnet test src/Exekias.SDS.Tests/
     dotnet test src/Exekias.AzureStorageEmulator.Tests/
 
 ## Build command line utility on Linux
