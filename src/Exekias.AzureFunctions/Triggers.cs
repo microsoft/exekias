@@ -1,5 +1,6 @@
+using Azure.Messaging.EventGrid;
+using Azure.Messaging.EventGrid.SystemEvents;
 using Exekias.Core;
-using Microsoft.Azure.EventGrid.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.DurableTask;
 using Microsoft.Azure.WebJobs.Extensions.EventGrid;
@@ -56,26 +57,14 @@ namespace Exekias.AzureFunctions
         {
             if (incomingEvent.EventType == "Microsoft.Storage.BlobCreated")
             {
-                string? fullPath = null;
-                if (incomingEvent.Data is StorageBlobCreatedEventData blobCreated)
+                string fullPath;
+                if (incomingEvent.TryGetSystemEventData(out var systemEvent) && systemEvent is StorageBlobCreatedEventData blobCreated)
                 {
-                    fullPath = blobCreated.Url;
-                }
-                else if (incomingEvent.Data is Newtonsoft.Json.Linq.JObject jObject)
-                {
-                    if (jObject.ContainsKey("url"))
-                    {
-                        fullPath = jObject.Value<string>("url");
-                    }
-                    if (string.IsNullOrWhiteSpace(fullPath))
-                    {
-                        log.LogError("The EventGrid data doesn't have property 'url' {0}", jObject.ToString());
-                        return;
-                    }
+                        fullPath = blobCreated.Url;
                 }
                 else
                 {
-                    log.LogError("Incoming event has wrong schema {0}", incomingEvent.Data.GetType().AssemblyQualifiedName);
+                    log.LogError("Cannot decode Microsoft.Storage.BlobCreated event");
                     return;
                 }
                 var basePath = runStore.AbsoluteBasePath;
@@ -83,17 +72,17 @@ namespace Exekias.AzureFunctions
                 {
                     var path = fullPath[basePath.Length..];
                     var eventTimeTicks = incomingEvent.EventTime.Ticks;
-                    var eventTimeTruncated = new DateTime(
+                    // truncate event time to second
+                    var lastModified = new DateTimeOffset(
                         eventTimeTicks - eventTimeTicks % TimeSpan.TicksPerSecond,
-                        incomingEvent.EventTime.Kind);
-                    var lastModified = new DateTimeOffset(eventTimeTruncated);
+                        incomingEvent.EventTime.Offset);
                     await Orchestrator.EnsureStarted(pipeline, log, options);
                     await Orchestrator.RaiseChangeEventAsync(pipeline, new FileShot(path, lastModified));
                     log.LogInformation("Update event for {0} at {1}.", path, lastModified);
                 }
                 else
                 {
-                    log.LogDebug("The event is for a blob {0} outside of Run store {1}.", fullPath, basePath);
+                    log.LogWarning("The event is for a blob {0} outside of Run store {1}.", fullPath, basePath);
                 }
             }
             else
