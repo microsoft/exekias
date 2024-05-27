@@ -48,9 +48,9 @@ jobs:
           chmod +x ${{ runner.temp }}/bicep
           echo "BicepPath=${{ runner.temp }}/bicep" >> $GITHUB_ENV
           
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 6.0.x
       - name: Download NetCDF
@@ -82,7 +82,7 @@ jobs:
       # id-token scope.
       - name: Login via Az module
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
