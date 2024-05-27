@@ -125,7 +125,7 @@ dataCommand.AddCommand(dataDownloadCommand);
 var backendCommand = new Command("backend", "Manage backend resources.");
 rootCommand.AddCommand(backendCommand);
 
-// backend create -- create or update backend services for a given blob container.
+// backend deploy -- create or update backend services for a given blob container.
 var backendDeployCommand = new Command("deploy", "Create or update backend services for a given blob container.");
 backendCommand.AddCommand(backendDeployCommand);
 backendDeployCommand.AddOption(azureSubscriptionOption);

@@ -29,7 +29,7 @@ resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
 }
 
 // ExekiasStore CosmosDB database
-resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' = {
+resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2022-11-15' = {
     name: syncName
     location: location
     properties: {
@@ -40,6 +40,7 @@ resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2021-03-15' = {
         capabilities: [ {
                 name: 'EnableServerless'
             } ]
+        minimalTlsVersion: 'Tls12'
     }
 }
 

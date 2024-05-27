@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - Upgrade package references due to vulnerable version of `Azure.Identity`.
+- `exekias backend deploy` command creates Cosmos DB account configured for minimum TSL version 1.2.
+
 
 ## [2.2.1] - 2024-01-18
 

@@ -94,23 +94,37 @@ The interactive command may create and connect metadata services to an existing 
 - Set BicepPath environment variable to point to the bicep executable, e.g. `/usr/local/bin/bicep`
 - Copy netCDF Windows .dll files and set LIBNETCDFPATH environment variable to the path of `netcdf.dll`.
     - On Windows, download and install latest Windows netCDF NC4 x64 installer package from https://docs.unidata.ucar.edu/netcdf-c/current/winbin.html
-    - Copy .dll files from the installed binaries, say, `C:\Program Files\netCDF 4.9.2\bin\*.dll` to the Linux machine, say, `~/netcdf/bin`.
+    - Compress all the `.dll` files, e.g. `Compress-Archive "C:\Program Files\netCDF 4.9.2\bin\*.dll" netcdf-win.zip`
+    - Copy the archive to the Linux machine and decompress it, e.g `mkdir -p ~/netcdf/bin && unzip netcdf-win.zip -d ~/netcdf/bin`
 - Run the `dotnet publish` command, e.g.
 
         BicepPath=/usr/local/bin/bicep LIBNETCDFPATH=~/netcdf/bin/netcdf.dll dotnet publish -c release src/exekias
 
 - Test the command is running
 
-        ./src/exekias/bin/release/net6.0/exekias -h
+        ./src/exekias/bin/release/net6.0/publish/exekias -h
 
 
 ## Running canary script on Linux
 
 - Install PowerShell, https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell.
 - Install Azure PowerShell
-
-        pwsh>Install-Module az
-
+  ```pwsh
+  Install-Module az
+  ```
 - Login to Azure with your account
-
-        pwsh> Login-AzAccount
+  ```pwsh
+  Login-AzAccount
+  ```
+- Set environment variables to a proper resource group and storage account names
+  ```pwsh
+  $env:EXEKIAS_SUBSCRIPTION="<subscription>"
+  $env:EXEKIAS_RESOURCEGROUP="exekias-canary-github-linux"
+  $env:EXEKIAS_STORAGEACCOUNT="exekiascanaryghl"
+  $env:EXEKIAS_BIN="./src/exekias/bin/release/net6.0/publish/exekias"
+  ```
+- Clean up the resource group and start the canary test
+  ```pwsh
+  .\cleanup_resource_group.ps1 $env:EXEKIAS_SUBSCRIPTION $env:EXEKIAS_RESOURCEGROUP
+  .\exekias-canary-test.ps1
+  ```
