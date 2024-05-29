@@ -1,4 +1,6 @@
-﻿using Azure.Storage.Blobs;
+﻿using Azure.Core;
+using Azure.Identity;
+using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Exekias.Core;
 using Microsoft.Extensions.Logging;
@@ -27,8 +29,7 @@ namespace Exekias.AzureStores
         /// </remarks>
         public class Options : OptionsBase
         {
-            public string? ConnectionString { get; set; }
-            public string? BlobContainerName { get; set; } = "runs";
+            public string? BlobContainerUrl { get; set; }
         }
         #endregion
         virtual protected BlobContainerClient ContainerClient { get; } // 'protected' to enable mocking
@@ -48,11 +49,11 @@ namespace Exekias.AzureStores
             : base(configurationOptions, importer, logger)
         {
             var options = configurationOptions.Value;
-            if (string.IsNullOrWhiteSpace(options?.ConnectionString))
-                throw new InvalidOperationException("ConnectionString not configured");
-            if (string.IsNullOrWhiteSpace(options?.BlobContainerName))
-                throw new InvalidOperationException("BlobContainerName not configured");
-            this.ContainerClient = new BlobContainerClient(options.ConnectionString, options.BlobContainerName);
+            if (string.IsNullOrWhiteSpace(options?.BlobContainerUrl))
+                throw new InvalidOperationException("BlobContainerUrl not configured");
+            var managedIdentity = Environment.GetEnvironmentVariable("AZURE_MANAGED_IDENTITY");
+            var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
+            ContainerClient = new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
             logger.LogInformation("Runs are in {0}", ContainerClient.Uri);
         }
         protected override async Task<IEnumerable<RunFile>> TraverseAll() =>

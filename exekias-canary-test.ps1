@@ -41,7 +41,7 @@ if (Test-Path ~/.exekias.json) {
 
 Write-Host "[$(Get-Date)] Start deployment of backend..."
 $context = Set-AzContext -Subscription $subscription
-& $exekias backend deploy --subscription $context.Subscription --resourcegroup $resourceGroup --storageaccount $storageAccount
+& $exekias backend deploy --subscription $context.Subscription --resourcegroup $resourceGroup --storageaccount $storageAccount --blobcontainer runs
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Deployment of backend failed, exit code: $LASTEXITCODE"
     exit 1

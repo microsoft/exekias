@@ -45,11 +45,14 @@ namespace Exekias.SDS.Blob.Batch
                     options.Name,
                     options.AccessKey));
             const string AppInsightsKey = "APPLICATIONINSIGHTS_CONNECTION_STRING";
+            const string ManagedIdentityKey = "AZURE_MANAGED_IDENTITY";
             jobEnvironment = (from name in new[] { "RunStore", "ImportStore", "ExekiasCosmos" }
                               from kv in configuration.GetSection(name).AsEnumerable()
                               where kv.Value != null
                               select kv).Append(new KeyValuePair<string, string>(
                                   AppInsightsKey, configuration[AppInsightsKey]
+                                  )).Append(new KeyValuePair<string, string>(
+                                  ManagedIdentityKey, configuration[ManagedIdentityKey]
                                   )).ToImmutableArray();
         }
 
@@ -180,6 +183,14 @@ $NodeDeallocationOption = taskcompletion;";
             var task = new CloudTask(taskId, taskCommandLine);
             // https://learn.microsoft.com/en-us/azure/batch/batch-user-accounts#run-a-task-as-an-auto-user-with-pool-scope
             task.UserIdentity = new UserIdentity(new AutoUserSpecification(AutoUserScope.Pool));
+            task.ApplicationPackageReferences = new List<ApplicationPackageReference> 
+            {
+                new ApplicationPackageReference
+                {
+                    ApplicationId = options.AppPackageId,
+                    Version = options.AppPackageVersion 
+                }
+            };
             return task;
         }
         static async Task EnsurePoolAndJob(BatchClient batchClient, BatchProcessingOptions options, IEnumerable<KeyValuePair<string, string>> configuration)

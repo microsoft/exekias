@@ -61,19 +61,70 @@ resource syncStore 'Microsoft.Storage/storageAccounts@2022-09-01' = {
 resource batchAccount 'Microsoft.Batch/batchAccounts@2022-10-01' = {
     name: syncName
     location: location
+    identity: {
+        type: 'SystemAssigned'
+    }
     properties: {
         autoStorage: {
             storageAccountId: syncStore.id
+            authenticationMode: 'BatchAccountManagedIdentity'
         }
     }
 }
 
+resource poolIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+    location: location
+    name: '${runStoreName}-${storeContainer}-job-identity'
+}
+
+resource batchPool 'Microsoft.Batch/batchAccounts/pools@2024-02-01' = {
+    parent: batchAccount
+    name: 'exekias'
+    identity: {
+        type:  'UserAssigned'
+        userAssignedIdentities:{
+            '${poolIdentity.id}': {}
+        }
+    }
+    properties:{
+        deploymentConfiguration:{
+            virtualMachineConfiguration:{
+                imageReference: {
+                    publisher: 'MicrosoftWindowsServer'
+                    offer: 'WindowsServer'
+                    sku: '2022-datacenter-core-smalldisk'
+                    version: 'latest'
+                }
+                nodeAgentSkuId: 'batch.node.windows amd64'
+            }
+        }
+        scaleSettings:{
+            autoScale:{
+                formula: '''
+maxConcurrency = 10;
+dormantTimeInterval = 2 * TimeInterval_Hour;
+isNotDormant = $PendingTasks.GetSamplePercent(dormantTimeInterval) < 50 ? 1 : max($PendingTasks.GetSample(dormantTimeInterval));
+observationTimeInterval = 1 * TimeInterval_Hour;
+observedConcurrency = min(
+    $PendingTasks.GetSamplePercent(observationTimeInterval) < 50 ? 1 : max(1, $PendingTasks.GetSample(observationTimeInterval)), 
+    maxConcurrency);
+$TargetDedicatedNodes = isNotDormant ? 1 : 0;
+$TargetLowPriorityNodes = observedConcurrency - 1;
+$NodeDeallocationOption = taskcompletion;'''
+            }
+        }
+        vmSize: 'standard_d1_v2'
+    }
+}
 // Sync function
 
 resource syncApp 'Microsoft.Web/sites@2022-09-01' = {
     name: syncFunctionName
     location: location
     kind: 'functionapp'
+    identity: {
+        type: 'SystemAssigned'
+    }
     properties: {
         httpsOnly: true
         siteConfig: {
@@ -151,8 +202,8 @@ resource syncApp 'Microsoft.Web/sites@2022-09-01' = {
                     value: '30'
                 }
                 {
-                    name: 'RunStore:BlobContainerName'
-                    value: storeContainer
+                    name: 'RunStore:BlobContainerUrl'
+                    value: '${runStore.properties.primaryEndpoints.blob}${storeContainer}'
                 }
                 {
                     name: 'RunStore:ConnectionString'
@@ -162,11 +213,50 @@ resource syncApp 'Microsoft.Web/sites@2022-09-01' = {
                     name: 'RunStore:MetadataFilePattern'
                     value: metadataFilePattern
                 }
+                {
+                    name:'AZURE_MANAGED_IDENTITY'
+                    value: poolIdentity.properties.clientId
+                }
             ]
         }
     }
 }
 
+resource blobDataReaderRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+    name: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'
+}
+
+resource blobDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+    name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+}
+
+resource functionDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+    scope: runStore
+    name: guid(syncApp.id, runStore.id, blobDataReaderRoleDefinition.id)
+    properties: {
+        principalId: syncApp.identity.principalId
+        roleDefinitionId: blobDataReaderRoleDefinition.id 
+    }
+}
+
+resource batchDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+    scope: syncStore
+    name: guid(batchAccount.id, syncStore.id, blobDataContributorRoleDefinition.id)
+    properties: {
+        principalId: batchAccount.identity.principalId
+        roleDefinitionId: blobDataContributorRoleDefinition.id 
+    }
+}
+
+resource poolDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+    scope: runStore
+    name: guid(poolIdentity.id, runStore.id, blobDataContributorRoleDefinition.id)
+    properties: {
+        principalId: poolIdentity.properties.principalId
+        principalType: 'ServicePrincipal'  // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
+        roleDefinitionId: blobDataContributorRoleDefinition.id 
+    }
+}
 
 output syncFunctionId string = syncApp.id
 output topicId string = topic.id
