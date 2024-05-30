@@ -123,6 +123,7 @@ The interactive command may create and connect metadata services to an existing 
   $env:EXEKIAS_STORAGEACCOUNT="exekiascanaryghl"
   $env:EXEKIAS_BIN="./src/exekias/bin/release/net6.0/publish/exekias"
   ```
+  You will need owner role in the resource group for the deployment to succeed.
 - Clean up the resource group and start the canary test
   ```pwsh
   .\cleanup_resource_group.ps1 $env:EXEKIAS_SUBSCRIPTION $env:EXEKIAS_RESOURCEGROUP

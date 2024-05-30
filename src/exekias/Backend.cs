@@ -83,7 +83,7 @@ partial class Program
         if (dontExist.Length > 0) { throw new InvalidOperationException($"Cannot find the following file(s): {dontExist}"); }
 
         // Deploy ARM resources using template file
-        ArmDeploymentResource deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed, 
+        ArmDeploymentResource deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed,
             deploymentName,
             new ArmDeploymentContent(
                 new ArmDeploymentProperties(ArmDeploymentMode.Incremental)
@@ -106,6 +106,7 @@ partial class Program
         var syncFunctionId = deploymentOutput["syncFunctionId"]?["value"]?.GetValue<string?>();
         var topicId = deploymentOutput["topicId"]?["value"]?.GetValue<string?>();
         var batchAccountId = deploymentOutput["batchAccountId"]?["value"]?.GetValue<string?>();
+        var batchPoolId = deploymentOutput["batchPoolId"]?["value"]?.GetValue<string?>();
 
         // deploy syncFunction code from sync.zip
         WebSiteResource syncFunction = arm.Value.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
@@ -127,7 +128,8 @@ partial class Program
         });
 
         console.WriteLine("Adding application package to batch account.");
-        UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0", console);
+        PoolAssignApplication(batchPoolId!,
+            UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0", console));
     }
 
     static WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath)
@@ -161,7 +163,7 @@ partial class Program
         return funcApp.Get();
     }
 
-    static void UploadBatchApplicationPackage(string packagePath, string batchAccountId, string appName, string version, IConsole console)
+    static BatchApplicationPackageReference UploadBatchApplicationPackage(string packagePath, string batchAccountId, string appName, string version, IConsole console)
     {
         var batchAccount = arm.Value.GetBatchAccountResource(new ResourceIdentifier(batchAccountId!));
         BatchApplicationResource batchAccountApplication = batchAccount
@@ -177,6 +179,29 @@ partial class Program
         blobClient.Upload(packageStream);
         console.WriteLine($"Uploaded app package {Path.GetFileName(packagePath)} to Batch Service {batchAccount.Id.Name} as {appName} v.{version}");
         appPackage.Activate(new BatchApplicationPackageActivateContent("zip"));
+        return new BatchApplicationPackageReference(batchAccountApplication.Id) { Version = version };
+    }
+
+    static void PoolAssignApplication(string batchPoolId, BatchApplicationPackageReference appReference)
+    {
+        var batchPool = arm.Value.GetBatchAccountPoolResource(new ResourceIdentifier(batchPoolId!));
+        batchPool.Update(new BatchAccountPoolData()
+        {
+            ApplicationPackages = { appReference },
+            ScaleSettings = new BatchAccountPoolScaleSettings()
+            {
+                AutoScale = new BatchAccountAutoScaleSettings(@"maxConcurrency = 10;
+dormantTimeInterval = 2 * TimeInterval_Hour;
+isNotDormant = $PendingTasks.GetSamplePercent(dormantTimeInterval) < 50 ? 1 : max($PendingTasks.GetSample(dormantTimeInterval));
+observationTimeInterval = 1 * TimeInterval_Hour;
+observedConcurrency = min(
+    $PendingTasks.GetSamplePercent(observationTimeInterval) < 50 ? 1 : max(1, $PendingTasks.GetSample(observationTimeInterval)), 
+    maxConcurrency);
+$TargetDedicatedNodes = isNotDormant ? 1 : 0;
+$TargetLowPriorityNodes = observedConcurrency - 1;
+$NodeDeallocationOption = taskcompletion;")
+            }
+        });
     }
 
     static int DoBackendDeploy(

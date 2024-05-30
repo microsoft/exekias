@@ -68,6 +68,9 @@ resource batchAccount 'Microsoft.Batch/batchAccounts@2022-10-01' = {
         autoStorage: {
             storageAccountId: syncStore.id
             authenticationMode: 'BatchAccountManagedIdentity'
+            nodeIdentityReference: {
+                resourceId: poolIdentity.id
+            }
         }
     }
 }
@@ -99,21 +102,12 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2024-02-01' = {
             }
         }
         scaleSettings:{
-            autoScale:{
-                formula: '''
-maxConcurrency = 10;
-dormantTimeInterval = 2 * TimeInterval_Hour;
-isNotDormant = $PendingTasks.GetSamplePercent(dormantTimeInterval) < 50 ? 1 : max($PendingTasks.GetSample(dormantTimeInterval));
-observationTimeInterval = 1 * TimeInterval_Hour;
-observedConcurrency = min(
-    $PendingTasks.GetSamplePercent(observationTimeInterval) < 50 ? 1 : max(1, $PendingTasks.GetSample(observationTimeInterval)), 
-    maxConcurrency);
-$TargetDedicatedNodes = isNotDormant ? 1 : 0;
-$TargetLowPriorityNodes = observedConcurrency - 1;
-$NodeDeallocationOption = taskcompletion;'''
+            fixedScale:{
+                targetDedicatedNodes: 0
+                targetLowPriorityNodes: 0
             }
         }
-        vmSize: 'standard_d1_v2'
+        vmSize: batchVmSize
     }
 }
 // Sync function
@@ -214,7 +208,7 @@ resource syncApp 'Microsoft.Web/sites@2022-09-01' = {
                     value: metadataFilePattern
                 }
                 {
-                    name:'AZURE_MANAGED_IDENTITY'
+                    name:'POOL_MANAGED_IDENTITY'
                     value: poolIdentity.properties.clientId
                 }
             ]
@@ -230,27 +224,39 @@ resource blobDataContributorRoleDefinition 'Microsoft.Authorization/roleDefiniti
     name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 }
 
-resource functionDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource functionRunDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     scope: runStore
     name: guid(syncApp.id, runStore.id, blobDataReaderRoleDefinition.id)
     properties: {
         principalId: syncApp.identity.principalId
+        principalType: 'ServicePrincipal'  // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
         roleDefinitionId: blobDataReaderRoleDefinition.id 
     }
 }
 
-resource batchDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource batchSyncDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     scope: syncStore
     name: guid(batchAccount.id, syncStore.id, blobDataContributorRoleDefinition.id)
     properties: {
         principalId: batchAccount.identity.principalId
+        principalType: 'ServicePrincipal'  // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
         roleDefinitionId: blobDataContributorRoleDefinition.id 
     }
 }
 
-resource poolDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource poolRunDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     scope: runStore
-    name: guid(poolIdentity.id, runStore.id, blobDataContributorRoleDefinition.id)
+    name: guid(poolIdentity.id, runStore.id, blobDataReaderRoleDefinition.id)
+    properties: {
+        principalId: poolIdentity.properties.principalId
+        principalType: 'ServicePrincipal'  // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
+        roleDefinitionId: blobDataReaderRoleDefinition.id 
+    }
+}
+
+resource poolSyncDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+    scope: syncStore
+    name: guid(poolIdentity.id, syncStore.id, blobDataContributorRoleDefinition.id)
     properties: {
         principalId: poolIdentity.properties.principalId
         principalType: 'ServicePrincipal'  // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
@@ -261,6 +267,7 @@ resource poolDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignme
 output syncFunctionId string = syncApp.id
 output topicId string = topic.id
 output batchAccountId string = batchAccount.id
+output batchPoolId string = batchPool.id
 
 // additional resources
 

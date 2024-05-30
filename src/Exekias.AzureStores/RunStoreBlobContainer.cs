@@ -51,7 +51,7 @@ namespace Exekias.AzureStores
             var options = configurationOptions.Value;
             if (string.IsNullOrWhiteSpace(options?.BlobContainerUrl))
                 throw new InvalidOperationException("BlobContainerUrl not configured");
-            var managedIdentity = Environment.GetEnvironmentVariable("AZURE_MANAGED_IDENTITY");
+            var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
             var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
             ContainerClient = new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
             logger.LogInformation("Runs are in {0}", ContainerClient.Uri);

@@ -1,5 +1,4 @@
-﻿using Exekias.SDS.Blob.Batch;
-using Microsoft.Azure.Batch.Common;
+﻿using Microsoft.Azure.Batch.Common;
 using Microsoft.Azure.Batch;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -11,7 +10,6 @@ using Exekias.Core;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Immutable;
-using System.Security.Cryptography;
 
 namespace Exekias.SDS.Blob.Batch
 {
@@ -45,15 +43,16 @@ namespace Exekias.SDS.Blob.Batch
                     options.Name,
                     options.AccessKey));
             const string AppInsightsKey = "APPLICATIONINSIGHTS_CONNECTION_STRING";
-            const string ManagedIdentityKey = "AZURE_MANAGED_IDENTITY";
-            jobEnvironment = (from name in new[] { "RunStore", "ImportStore", "ExekiasCosmos" }
-                              from kv in configuration.GetSection(name).AsEnumerable()
-                              where kv.Value != null
-                              select kv).Append(new KeyValuePair<string, string>(
-                                  AppInsightsKey, configuration[AppInsightsKey]
-                                  )).Append(new KeyValuePair<string, string>(
-                                  ManagedIdentityKey, configuration[ManagedIdentityKey]
-                                  )).ToImmutableArray();
+            const string PoolIdentityKey = "POOL_MANAGED_IDENTITY";
+            const string ManagedIdentityKey = "USER_ASSIGNED_MANAGED_IDENTITY";
+            jobEnvironment =
+                (from name in new[] { "RunStore", "ImportStore", "ExekiasCosmos" }
+                 from kv in configuration.GetSection(name).AsEnumerable()
+                 where kv.Value != null
+                 select kv)
+                .Append(new KeyValuePair<string, string>(AppInsightsKey, configuration[AppInsightsKey]))
+                .Append(new KeyValuePair<string, string>(ManagedIdentityKey, configuration[PoolIdentityKey]))
+                .ToImmutableArray();
         }
 
         public override async ValueTask ImportRunData(IRunStore RunStore, IExekiasStore ExekiasStore, string runPath, IEnumerable<FileShot> data)
@@ -66,100 +65,6 @@ namespace Exekias.SDS.Blob.Batch
                 return;
             }
             await SubmitTasksAsync(runPath, files, batchClient, options);
-        }
-
-
-        static async Task SubmitJobAsync(
-            string runId,
-            IList<string> runFiles,
-            IEnumerable<KeyValuePair<string, string>> configuration,
-            BatchClient batchClient,
-            BatchProcessingOptions options)
-        {
-            var jobId = Regex.Replace(runId, "[^0-9a-zA-Z_-]", "_");
-            if (jobId.Length > 44)
-            {
-                jobId = jobId.Substring(0, 44);
-            }
-            jobId = $"{jobId}_{DateTimeOffset.UtcNow.UtcTicks}";
-            var job = batchClient.JobOperations.CreateJob(jobId, new PoolInformation() { PoolId = options.PoolId });
-
-            job.CommonEnvironmentSettings = configuration.Select(kv => new EnvironmentSetting(kv.Key, kv.Value)).ToList();
-            await job.CommitAsync();
-            await job.RefreshAsync();
-
-            CloudTask[] tasks = new CloudTask[runFiles.Count];
-            for (int i = 0; i < runFiles.Count; i++) tasks[i] = CreateTask(runId, options, runFiles[i], i + 1);
-            await job.AddTaskAsync(tasks);
-
-            job.OnAllTasksComplete = OnAllTasksComplete.TerminateJob;
-            await job.CommitAsync();
-        }
-        static async Task CreatePoolIfNotExists(BatchClient batchClient, BatchProcessingOptions options)
-        {
-            // Create a pool if not exists
-            // VM size standard_d1_v2 (Dv2 series) - 1 vCPU, 3.5G mem, 50G temp (SSD) 46MBps read throughput, 750 MBps network bandwidth
-            // 1 task per node at a time
-            // Image 2022-datacenter-core-smalldisk
-            // Node agent batch.node.widnows amd64
-            // Application package dataimport 1.0
-
-            CloudPool? pool = null;
-            try
-            {
-                pool = await batchClient.PoolOperations.GetPoolAsync(options.PoolId);
-            }
-            catch (BatchException exc)
-            {
-                if (exc.RequestInformation.HttpStatusCode != System.Net.HttpStatusCode.NotFound)
-                    throw;
-            }
-            if (null == pool)
-            {
-                Console.WriteLine("Creating pool [{0}]...", options.PoolId);
-
-                ImageReference imageReference = new ImageReference(
-                    publisher: options.VmImagePublisher,
-                    offer: options.VmImageOffer,
-                    sku: options.VmImageSKU,
-                    version: "latest");
-
-                VirtualMachineConfiguration virtualMachineConfiguration = new VirtualMachineConfiguration(
-                    imageReference: imageReference,
-                    nodeAgentSkuId: options.VmAgentSKU);
-
-                pool = batchClient.PoolOperations.CreatePool(
-                    poolId: options.PoolId,
-                    virtualMachineSize: options.VmSize,
-                    virtualMachineConfiguration: virtualMachineConfiguration);
-
-                pool.AutoScaleEnabled = true;
-                // Default AutoScaleEvaluationInterval is 15 min, minimum 5 min.
-                // No activity for >2h => no allocated nodes (dormant).
-                // concurrency = min(maxcuncurrency, max pending tasks for 1h).
-                // concurrency == 0 => one dedicated node (sleep).
-                // concurrency > 0 => one dedicated node and (concurrency - 1) spot nodes.
-                // see https://learn.microsoft.com/en-gb/azure/batch/batch-automatic-scaling
-                pool.AutoScaleFormula = @"
-maxConcurrency = 10;
-dormantTimeInterval = 2 * TimeInterval_Hour;
-isNotDormant = $PendingTasks.GetSamplePercent(dormantTimeInterval) < 50 ? 1 : max($PendingTasks.GetSample(dormantTimeInterval));
-observationTimeInterval = 1 * TimeInterval_Hour;
-observedConcurrency = min(
-  $PendingTasks.GetSamplePercent(observationTimeInterval) < 50 ? 1 : max(1, $PendingTasks.GetSample(observationTimeInterval)), 
-  maxConcurrency);
-$TargetDedicatedNodes = isNotDormant ? 1 : 0;
-$TargetLowPriorityNodes = observedConcurrency - 1;
-$NodeDeallocationOption = taskcompletion;";
-
-                pool.ApplicationPackageReferences = new List<ApplicationPackageReference> {
-        new ApplicationPackageReference{
-            ApplicationId = options.AppPackageId,
-            Version = options.AppPackageVersion }
-    };
-
-                await pool.CommitAsync();
-            }
         }
 
         static CloudTask CreateTask(string runId, BatchProcessingOptions options, string runFile, long stamp)
@@ -179,18 +84,10 @@ $NodeDeallocationOption = taskcompletion;";
             }
             taskId = $"{taskId}_{stamp:x}";
             string appPath = $"%AZ_BATCH_APP_PACKAGE_{options.AppPackageId}#{options.AppPackageVersion}%";
-            string taskCommandLine = $"cmd /c {appPath}\\{options.AppPackageExe} \"{runId.Replace("\"","\"\"")}\" \"{runFile.Replace("\"", "\"\"")}\"";
+            string taskCommandLine = $"cmd /c {appPath}\\{options.AppPackageExe} \"{runId.Replace("\"", "\"\"")}\" \"{runFile.Replace("\"", "\"\"")}\"";
             var task = new CloudTask(taskId, taskCommandLine);
             // https://learn.microsoft.com/en-us/azure/batch/batch-user-accounts#run-a-task-as-an-auto-user-with-pool-scope
             task.UserIdentity = new UserIdentity(new AutoUserSpecification(AutoUserScope.Pool));
-            task.ApplicationPackageReferences = new List<ApplicationPackageReference> 
-            {
-                new ApplicationPackageReference
-                {
-                    ApplicationId = options.AppPackageId,
-                    Version = options.AppPackageVersion 
-                }
-            };
             return task;
         }
         static async Task EnsurePoolAndJob(BatchClient batchClient, BatchProcessingOptions options, IEnumerable<KeyValuePair<string, string>> configuration)
@@ -202,60 +99,7 @@ $NodeDeallocationOption = taskcompletion;";
             // Node agent batch.node.widnows amd64
             // Application package dataimport 1.0
 
-            CloudPool? pool = null;
-            try
-            {
-                pool = await batchClient.PoolOperations.GetPoolAsync(options.PoolId);
-            }
-            catch (BatchException exc)
-            {
-                if (exc.RequestInformation.HttpStatusCode != System.Net.HttpStatusCode.NotFound)
-                    throw;
-            }
-            if (null == pool)
-            {
-                ImageReference imageReference = new ImageReference(
-                    publisher: options.VmImagePublisher,
-                    offer: options.VmImageOffer,
-                    sku: options.VmImageSKU,
-                    version: "latest");
-
-                VirtualMachineConfiguration virtualMachineConfiguration = new VirtualMachineConfiguration(
-                    imageReference: imageReference,
-                    nodeAgentSkuId: options.VmAgentSKU);
-
-                pool = batchClient.PoolOperations.CreatePool(
-                    poolId: options.PoolId,
-                    virtualMachineSize: options.VmSize,
-                    virtualMachineConfiguration: virtualMachineConfiguration);
-
-                pool.AutoScaleEnabled = true;
-                // Default AutoScaleEvaluationInterval is 15 min, minimum 5 min.
-                // No activity for >2h => no allocated nodes (dormant).
-                // concurrency = min(maxcuncurrency, max pending tasks for 1h).
-                // concurrency == 0 => one dedicated node (sleep).
-                // concurrency > 0 => one dedicated node and (concurrency - 1) spot nodes.
-                // see https://learn.microsoft.com/en-gb/azure/batch/batch-automatic-scaling
-                pool.AutoScaleFormula = @"
-maxConcurrency = 10;
-dormantTimeInterval = 2 * TimeInterval_Hour;
-isNotDormant = $PendingTasks.GetSamplePercent(dormantTimeInterval) < 50 ? 1 : max($PendingTasks.GetSample(dormantTimeInterval));
-observationTimeInterval = 1 * TimeInterval_Hour;
-observedConcurrency = min(
-  $PendingTasks.GetSamplePercent(observationTimeInterval) < 50 ? 1 : max(1, $PendingTasks.GetSample(observationTimeInterval)), 
-  maxConcurrency);
-$TargetDedicatedNodes = isNotDormant ? 1 : 0;
-$TargetLowPriorityNodes = observedConcurrency - 1;
-$NodeDeallocationOption = taskcompletion;";
-
-                pool.ApplicationPackageReferences = new List<ApplicationPackageReference> {
-        new ApplicationPackageReference{
-            ApplicationId = options.AppPackageId,
-            Version = options.AppPackageVersion }
-    };
-
-                await pool.CommitAsync();
-            }
+            CloudPool pool = await batchClient.PoolOperations.GetPoolAsync(options.PoolId);
             CloudJob? job = null;
             try
             {
