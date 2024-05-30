@@ -9,7 +9,7 @@ partial class Program
 {
     static BlobContainerClient CreateBlobContainerClient(ExekiasConfig cfg)
     {
-        return new BlobContainerClient(cfg.runStoreConnectionString, cfg.runStoreContainerName);
+        return new BlobContainerClient(new Uri(cfg.runStoreUrl), new Azure.Identity.DefaultAzureCredential());
     }
 
     static async Task DoDataLs(

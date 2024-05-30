@@ -11,12 +11,18 @@ var syncName = '${take(runStoreName, 19)}8sync'
 var syncFunctionName = '${syncName}-${storeContainer}'
 
 // RunStore storage
-resource runStore 'Microsoft.Storage/storageAccounts@2022-09-01' existing = {
+resource runStore 'Microsoft.Storage/storageAccounts@2023-04-01' existing = {
     name: runStoreName
 }
 
-resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
-    name: '${runStoreName}/default/${storeContainer}'
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-04-01' existing = {
+    name: 'default'
+    parent: runStore
+}
+
+resource blobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-04-01' = {
+    name: storeContainer
+    parent: blobService
 }
 
 resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
@@ -29,7 +35,7 @@ resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
 }
 
 // ExekiasStore CosmosDB database
-resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2022-11-15' = {
+resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
     name: syncName
     location: location
     properties: {
@@ -45,7 +51,7 @@ resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2022-11-15' = {
 }
 
 // Storage account for sync services
-resource syncStore 'Microsoft.Storage/storageAccounts@2022-09-01' = {
+resource syncStore 'Microsoft.Storage/storageAccounts@2023-04-01' = {
     name: syncName
     location: location
     kind: 'StorageV2'
@@ -58,7 +64,7 @@ resource syncStore 'Microsoft.Storage/storageAccounts@2022-09-01' = {
 }
 
 // Batch account
-resource batchAccount 'Microsoft.Batch/batchAccounts@2022-10-01' = {
+resource batchAccount 'Microsoft.Batch/batchAccounts@2024-02-01' = {
     name: syncName
     location: location
     identity: {
@@ -102,9 +108,18 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2024-02-01' = {
             }
         }
         scaleSettings:{
-            fixedScale:{
-                targetDedicatedNodes: 0
-                targetLowPriorityNodes: 0
+            autoScale:{
+                formula: '''
+maxConcurrency = 10;
+dormantTimeInterval = 2 * TimeInterval_Hour;
+isNotDormant = $PendingTasks.GetSamplePercent(dormantTimeInterval) < 50 ? 1 : max($PendingTasks.GetSample(dormantTimeInterval));
+observationTimeInterval = 1 * TimeInterval_Hour;
+observedConcurrency = min(
+    $PendingTasks.GetSamplePercent(observationTimeInterval) < 50 ? 1 : max(1, $PendingTasks.GetSample(observationTimeInterval)), 
+    maxConcurrency);
+$TargetDedicatedNodes = isNotDormant ? 1 : 0;
+$TargetLowPriorityNodes = observedConcurrency - 1;
+$NodeDeallocationOption = taskcompletion;'''
             }
         }
         vmSize: batchVmSize
@@ -112,7 +127,7 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2024-02-01' = {
 }
 // Sync function
 
-resource syncApp 'Microsoft.Web/sites@2022-09-01' = {
+resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
     name: syncFunctionName
     location: location
     kind: 'functionapp'
@@ -198,10 +213,6 @@ resource syncApp 'Microsoft.Web/sites@2022-09-01' = {
                 {
                     name: 'RunStore:BlobContainerUrl'
                     value: '${runStore.properties.primaryEndpoints.blob}${storeContainer}'
-                }
-                {
-                    name: 'RunStore:ConnectionString'
-                    value: 'DefaultEndpointsProtocol=https;AccountName=${runStore.name};AccountKey=${runStore.listKeys().keys[0].value}'
                 }
                 {
                     name: 'RunStore:MetadataFilePattern'

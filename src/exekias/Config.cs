@@ -9,7 +9,6 @@ using Azure.ResourceManager.EventGrid.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
-using System;
 using System.CommandLine;
 using System.CommandLine.IO;
 using System.Text.Json;
@@ -17,17 +16,27 @@ using System.Text.Json;
 record ExekiasConfig(
     string subscriptionResourceId,
     string resourceGroup,
-    string storageAccount,
-    string runStoreConnectionString,
-    string runStoreContainerName,
+    string runStoreUrl,
     string runStoreMetadataFilePattern,
     string exekiasStoreConnectionString,
     string exekiasStoreDatabaseName,
-    string exekiasStoreContainerName);
+    string exekiasStoreContainerName)
+{
+    public string storageAccount
+    {
+        get
+        {
+            var host = new Uri(runStoreUrl).Host;
+            return host.Substring(0, host.IndexOf('.'));
+        }
+    }
+
+    public string runStoreContainerName => new Uri(runStoreUrl).LocalPath;
+}
 
 partial class Program
 {
-    static TokenCredential credential = new Azure.Identity.DefaultAzureCredential(
+    static TokenCredential credential = new DefaultAzureCredential(
         new DefaultAzureCredentialOptions()
         {
             ExcludeInteractiveBrowserCredential = false,
@@ -98,7 +107,7 @@ partial class Program
         console.WriteLine($"Subscription: {subscription.Data.SubscriptionId} ({subscription.Data.DisplayName})");
         ResourceGroupResource resourceGroup = subscription.GetResourceGroup(cfg.resourceGroup);
         console.WriteLine($"Resource group: {resourceGroup.Data.Name} ({resourceGroup.Data.Location})");
-        console.WriteLine($"Blob container: {cfg.runStoreContainerName} at {cfg.storageAccount}");
+        console.WriteLine($"Blob container: {cfg.runStoreUrl}");
         console.WriteLine($"Blob metadata file pattern: {cfg.runStoreMetadataFilePattern}");
         return 0;
     }
@@ -217,7 +226,8 @@ partial class Program
                 resourceGroup.Data.Location
                 )
             {
-                AllowBlobPublicAccess = false
+                AllowBlobPublicAccess = false,
+                AllowSharedKeyAccess = false
             }
             ).Value;
         // retry until BlobService available on the account
@@ -411,9 +421,7 @@ partial class Program
             var cfg = new ExekiasConfig(
                 subscriptionResource.Id.ToString(),
                 resourceGroup.Data.Name,
-                storageAccount.Data.Name,
-                runStoreConnectionString: appSettings.Properties["RunStore:ConnectionString"],
-                runStoreContainerName: appSettings.Properties.TryGetValue("RunStore:BlobContainerName", out string? bcnValue) && bcnValue != null ? bcnValue : "runs",
+                appSettings.Properties["RunStore:BlobContainerUrl"],
                 runStoreMetadataFilePattern: appSettings.Properties["RunStore:MetadataFilePattern"],
                 exekiasStoreConnectionString: appSettings.Properties["ExekiasCosmos:ConnectionString"],
                 exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos:DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",

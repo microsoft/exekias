@@ -7,6 +7,7 @@ using Azure.ResourceManager.EventGrid.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
 using Azure.ResourceManager.Storage;
+using Azure.ResourceManager.Storage.Models;
 using Azure.Storage.Blobs.Specialized;
 using System.CommandLine;
 using System.CommandLine.IO;
@@ -82,6 +83,12 @@ partial class Program
             (new[] { templatePath, syncPackagePath, tablesPath }).Where(p => !File.Exists(p)));
         if (dontExist.Length > 0) { throw new InvalidOperationException($"Cannot find the following file(s): {dontExist}"); }
 
+        // Ensure run storage doesn't allow public access and shared keys
+        runStore.Update(new StorageAccountPatch()
+        {
+            AllowBlobPublicAccess = false,
+            AllowSharedKeyAccess = false
+        });
         // Deploy ARM resources using template file
         ArmDeploymentResource deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed,
             deploymentName,
@@ -187,20 +194,7 @@ partial class Program
         var batchPool = arm.Value.GetBatchAccountPoolResource(new ResourceIdentifier(batchPoolId!));
         batchPool.Update(new BatchAccountPoolData()
         {
-            ApplicationPackages = { appReference },
-            ScaleSettings = new BatchAccountPoolScaleSettings()
-            {
-                AutoScale = new BatchAccountAutoScaleSettings(@"maxConcurrency = 10;
-dormantTimeInterval = 2 * TimeInterval_Hour;
-isNotDormant = $PendingTasks.GetSamplePercent(dormantTimeInterval) < 50 ? 1 : max($PendingTasks.GetSample(dormantTimeInterval));
-observationTimeInterval = 1 * TimeInterval_Hour;
-observedConcurrency = min(
-    $PendingTasks.GetSamplePercent(observationTimeInterval) < 50 ? 1 : max(1, $PendingTasks.GetSample(observationTimeInterval)), 
-    maxConcurrency);
-$TargetDedicatedNodes = isNotDormant ? 1 : 0;
-$TargetLowPriorityNodes = observedConcurrency - 1;
-$NodeDeallocationOption = taskcompletion;")
-            }
+            ApplicationPackages = { appReference }
         });
     }
 

@@ -85,9 +85,12 @@ namespace Exekias.SDS.Blob.Batch
             taskId = $"{taskId}_{stamp:x}";
             string appPath = $"%AZ_BATCH_APP_PACKAGE_{options.AppPackageId}#{options.AppPackageVersion}%";
             string taskCommandLine = $"cmd /c {appPath}\\{options.AppPackageExe} \"{runId.Replace("\"", "\"\"")}\" \"{runFile.Replace("\"", "\"\"")}\"";
-            var task = new CloudTask(taskId, taskCommandLine);
-            // https://learn.microsoft.com/en-us/azure/batch/batch-user-accounts#run-a-task-as-an-auto-user-with-pool-scope
-            task.UserIdentity = new UserIdentity(new AutoUserSpecification(AutoUserScope.Pool));
+            var task = new CloudTask(taskId, taskCommandLine)
+            {
+                // https://learn.microsoft.com/en-us/azure/batch/batch-user-accounts#run-a-task-as-an-auto-user-with-pool-scope
+                UserIdentity = new UserIdentity(new AutoUserSpecification(AutoUserScope.Pool)),
+                ApplicationPackageReferences = new List<ApplicationPackageReference> { new ApplicationPackageReference() { ApplicationId = options.AppPackageId, Version = options.AppPackageVersion } }
+            };
             return task;
         }
         static async Task EnsurePoolAndJob(BatchClient batchClient, BatchProcessingOptions options, IEnumerable<KeyValuePair<string, string>> configuration)
