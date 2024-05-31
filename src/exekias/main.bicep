@@ -143,17 +143,29 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
             ftpsState: 'FtpsOnly'
             appSettings: [
                 {
-                    name: 'AzureWebJobsStorage'
-                    value: 'DefaultEndpointsProtocol=https;AccountName=${syncStore.name};AccountKey=${syncStore.listKeys().keys[0].value}'
+                    name: 'AzureWebJobsStorage__accountName'
+                    value: syncStore.name
                 }
                 {
-                    name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-                    value: 'DefaultEndpointsProtocol=https;AccountName=${syncStore.name};AccountKey=${syncStore.listKeys().keys[0].value}'
+                    name: 'AzureWebJobsStorage__blobServiceUri'
+                    value: runStore.properties.primaryEndpoints.blob
                 }
                 {
-                    name: 'WEBSITE_CONTENTSHARE'
-                    value: toLower(syncFunctionName)
+                    name: 'AzureWebJobsStorage__queueServiceUri'
+                    value: runStore.properties.primaryEndpoints.queue
                 }
+                {
+                    name: 'AzureWebJobsStorage__tableServiceUri'
+                    value: runStore.properties.primaryEndpoints.table
+                }
+                // {
+                //     name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
+                //     value: 'DefaultEndpointsProtocol=https;AccountName=${syncStore.name};AccountKey=${syncStore.listKeys().keys[0].value}'
+                // }
+                // {
+                //     name: 'WEBSITE_CONTENTSHARE'
+                //     value: toLower(syncFunctionName)
+                // }
                 {
                     name: 'WEBSITE_RUN_FROM_PACKAGE'
                     value: '1'
@@ -232,7 +244,49 @@ resource blobDataReaderRoleDefinition 'Microsoft.Authorization/roleDefinitions@2
 }
 
 resource blobDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-    name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+    name: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'  // Storage Blob Data Contributor
+}
+
+resource blobDataOwnerRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+    name: 'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
+}
+
+resource queueDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+    name: '974c5e8b-45b9-4653-ba55-5f855dd0fb88'  // Storage Queue Data Contributor
+}
+
+resource tableDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+    name: '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'  // Storage Table Data Contributor
+}
+
+resource functionSyncBlobOwnerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+    scope: syncStore
+    name: guid(syncApp.id, syncStore.id, blobDataOwnerRoleDefinition.id)
+    properties: {
+        principalId: syncApp.identity.principalId
+        principalType: 'ServicePrincipal'  // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
+        roleDefinitionId: blobDataOwnerRoleDefinition.id 
+    }
+}
+
+resource functionSyncQueueContrinutorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+    scope: syncStore
+    name: guid(syncApp.id, syncStore.id, queueDataContributorRoleDefinition.id)
+    properties: {
+        principalId: syncApp.identity.principalId
+        principalType: 'ServicePrincipal'  // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
+        roleDefinitionId: queueDataContributorRoleDefinition.id 
+    }
+}
+
+resource functionSyncTableContrinutorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+    scope: syncStore
+    name: guid(syncApp.id, syncStore.id, tableDataContributorRoleDefinition.id)
+    properties: {
+        principalId: syncApp.identity.principalId
+        principalType: 'ServicePrincipal'  // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
+        roleDefinitionId: tableDataContributorRoleDefinition.id 
+    }
 }
 
 resource functionRunDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
