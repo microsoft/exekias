@@ -21,7 +21,7 @@ record ExekiasConfig(
     string runStoreConnectionString,
     string runStoreContainerName,
     string runStoreMetadataFilePattern,
-    string exekiasStoreConnectionString,
+    string exekiasStoreEndpoint,
     string exekiasStoreDatabaseName,
     string exekiasStoreContainerName);
 
@@ -415,7 +415,7 @@ partial class Program
                 runStoreConnectionString: appSettings.Properties["RunStore:ConnectionString"],
                 runStoreContainerName: appSettings.Properties.TryGetValue("RunStore:BlobContainerName", out string? bcnValue) && bcnValue != null ? bcnValue : "runs",
                 runStoreMetadataFilePattern: appSettings.Properties["RunStore:MetadataFilePattern"],
-                exekiasStoreConnectionString: appSettings.Properties["ExekiasCosmos:ConnectionString"],
+                exekiasStoreEndpoint: appSettings.Properties["ExekiasCosmos:Endpoint"],
                 exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos:DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
                 exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos:ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
                 );
