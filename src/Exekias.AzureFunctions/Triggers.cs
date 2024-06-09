@@ -1,39 +1,25 @@
-using Azure.Messaging.EventGrid;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
 using Azure.Messaging.EventGrid.SystemEvents;
 using Exekias.Core;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.DurableTask;
-using Microsoft.Azure.WebJobs.Extensions.EventGrid;
-using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System;
-using System.Net.Http;
-using System.Threading.Tasks;
+using Microsoft.DurableTask.Client;
 
 namespace Exekias.AzureFunctions
 {
-    public partial class TriggersAndActivities
+    public partial class TriggersAndActivities(
+        IOptions<PipelineOptions> options,
+        Steps steps,
+        IRunStore runStore,
+        IImporter importer,
+        IExekiasStore exekiasStore)
     {
-        readonly PipelineOptions options;
-        readonly IRunStore runStore;
-        readonly IImporter importer;
-        readonly IExekiasStore exekiasStore;
-        readonly Steps steps;
-        public TriggersAndActivities(
-            IOptions<PipelineOptions> options,
-            Steps steps,
-            IRunStore runStore,
-            IImporter importer,
-            IExekiasStore exekiasStore,
-            ILogger<TriggersAndActivities> logger)
-        {
-            this.options = options.Value;
-            this.steps = steps;
-            this.runStore = runStore;
-            this.importer = importer;
-            this.exekiasStore = exekiasStore;
-        }
+        readonly PipelineOptions options = options.Value;
+        readonly IRunStore runStore = runStore;
+        readonly IImporter importer = importer;
+        readonly IExekiasStore exekiasStore = exekiasStore;
+        readonly Steps steps = steps;
 
         // Defines four functions that can react to changes in blob storage.
         //  (blob change)
@@ -49,11 +35,11 @@ namespace Exekias.AzureFunctions
         //                  -> UpdateRun
 
 
-        [FunctionName(nameof(RunChangeEventSink))]
+        [Function(nameof(RunChangeEventSink))]
         public async Task RunChangeEventSink(
-            [EventGridTrigger] EventGridEvent incomingEvent,
-            [DurableClient] IDurableOrchestrationClient pipeline,
-            ILogger log)
+            [EventGridTrigger] Azure.Messaging.EventGrid.EventGridEvent incomingEvent,
+            [DurableClient] DurableTaskClient pipeline,
+            ILogger logger)
         {
             if (incomingEvent.EventType == "Microsoft.Storage.BlobCreated")
             {
@@ -64,7 +50,7 @@ namespace Exekias.AzureFunctions
                 }
                 else
                 {
-                    log.LogError("Cannot decode Microsoft.Storage.BlobCreated event");
+                    logger.LogError("Cannot decode Microsoft.Storage.BlobCreated event");
                     return;
                 }
                 var basePath = runStore.AbsoluteBasePath;
@@ -76,29 +62,29 @@ namespace Exekias.AzureFunctions
                     var lastModified = new DateTimeOffset(
                         eventTimeTicks - eventTimeTicks % TimeSpan.TicksPerSecond,
                         incomingEvent.EventTime.Offset);
-                    await Orchestrator.EnsureStarted(pipeline, log, options);
+                    await Orchestrator.EnsureStarted(pipeline, logger, options);
                     await Orchestrator.RaiseChangeEventAsync(pipeline, new FileShot(path, lastModified));
-                    log.LogInformation("Update event for {0} at {1}.", path, lastModified);
+                    logger.LogInformation("Update event for {path} at {timestamp}.", path, lastModified);
                 }
                 else
                 {
-                    log.LogWarning("The event is for a blob {0} outside of Run store {1}.", fullPath, basePath);
+                    logger.LogWarning("The event is for a blob {bolbPath} outside of Run store {storePath}.", fullPath, basePath);
                 }
             }
             else
             {
-                log.LogWarning("Received unsupportes event type {0}", incomingEvent.EventType);
+                logger.LogWarning("Received unsupportes event type {eventType}", incomingEvent.EventType);
             }
         }
 
 
-        [FunctionName(nameof(Housekeeper))]
+        [Function(nameof(Housekeeper))]
         public async Task Housekeeper(
             [TimerTrigger("0 1 2 * * *")] TimerInfo myTimer,
-            [DurableClient] IDurableOrchestrationClient pipeline,
+            [DurableClient] DurableTaskClient pipeline,
             ILogger log)
         {
-            log.LogDebug($"{nameof(Housekeeper)} timer trigger function executed at: {DateTime.Now} {myTimer.ScheduleStatus.Last}");
+            log.LogDebug("Housekeeper timer trigger function executed at: {timeUtc}, last {last}", DateTime.Now, myTimer.ScheduleStatus?.Last);
             await Orchestrator.EnsureStarted(pipeline, log, options);
             await Orchestrator.RaiseFullEventAsync(pipeline);
             log.LogInformation("Registered full scan.");
@@ -106,14 +92,14 @@ namespace Exekias.AzureFunctions
 
 
 
-        [FunctionName("Debug")]
+        [Function("Debug")]
         public async Task<string> Debug(
-            [HttpTrigger(AuthorizationLevel.Admin, "get", "post")] HttpRequestMessage req,
-            [DurableClient] IDurableOrchestrationClient starter,
-            ILogger log)
+            [HttpTrigger(AuthorizationLevel.Admin, "get", "post")] HttpRequestData req,
+            [DurableClient] DurableTaskClient starter,
+            ILogger log, PipelineOptions options)
         {
-            DurableOrchestrationStatus? status = null;
-            string? command = req.RequestUri.ParseQueryString()["command"];
+            OrchestrationMetadata? status = null;
+            string? command = req.Query["command"];
             if (null == command || "full".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
                 await Orchestrator.EnsureStarted(starter, log, options);
@@ -122,13 +108,13 @@ namespace Exekias.AzureFunctions
             }
             else if ("update".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
-                if (req.Content == null)
+                var path = await req.ReadAsStringAsync();
+                if (path == null)
                 {
                     log.LogWarning("Expecting path as the request content, ignore the request.");
                 }
                 else
                 {
-                    var path = await req.Content.ReadAsStringAsync();
                     if (string.IsNullOrWhiteSpace(path))
                     {
                         log.LogError("Path is empty, ignore the request.");
@@ -137,17 +123,17 @@ namespace Exekias.AzureFunctions
                     {
                         await Orchestrator.EnsureStarted(starter, log, options);
                         await Orchestrator.RaiseChangeEventAsync(starter, new FileShot(path, DateTimeOffset.Now));
-                        log.LogInformation("Registered an update for {0}.", path);
+                        log.LogInformation("Registered an update for {path}.", path);
                     }
                 }
             }
             else if ("restart".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
-                await starter.RestartAsync(Orchestrator.InstanceId, restartWithNewInstanceId: false);
+                await Orchestrator.EnsureStarted(starter, log, options);
             }
             else if ("purge".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
-                status = await starter.GetStatusAsync(Orchestrator.InstanceId);
+                status = await starter.GetInstanceAsync(Orchestrator.InstanceId);
                 if (null == status)
                 {
                     log.LogError("Instance didn't start yet.");
@@ -157,15 +143,15 @@ namespace Exekias.AzureFunctions
                     && status.RuntimeStatus != OrchestrationRuntimeStatus.Failed)
                 {
                     log.LogWarning("Instance not terminated yet, requesting termination. Wait until the status is Terminated and try purge again.");
-                    await starter.TerminateAsync(Orchestrator.InstanceId, "purge requested");
+                    await starter.TerminateInstanceAsync(Orchestrator.InstanceId, "purge requested");
                 }
                 else
                 {
-                    var purgeResult = await starter.PurgeInstanceHistoryAsync(Orchestrator.InstanceId);
-                    if (purgeResult?.InstancesDeleted > 0)
+                    var purgeResult = await starter.PurgeInstanceAsync(Orchestrator.InstanceId);
+                    if (purgeResult?.PurgedInstanceCount > 0)
                     {
-                        log.LogInformation("Deleted {number} instances, restarting.", purgeResult?.InstancesDeleted);
-                        status = await starter.GetStatusAsync(Orchestrator.InstanceId);
+                        log.LogInformation("Deleted {number} instances, restarting.", purgeResult?.PurgedInstanceCount);
+                        status = await starter.GetInstanceAsync(Orchestrator.InstanceId);
                         if (null == status)
                         {
                             await Orchestrator.EnsureStarted(starter, log, options);
@@ -173,12 +159,12 @@ namespace Exekias.AzureFunctions
                         }
                         else
                         {
-                            await starter.RestartAsync(Orchestrator.InstanceId, restartWithNewInstanceId: false);
+                            await Orchestrator.EnsureStarted(starter, log, options);
                         }
                     }
                 }
             }
-            status = await starter.GetStatusAsync(Orchestrator.InstanceId);
+            status = await starter.GetInstanceAsync(Orchestrator.InstanceId);
             return null == status ? "not started" : status.RuntimeStatus.ToString();
         }
     }

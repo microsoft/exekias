@@ -1,12 +1,8 @@
 ﻿using Exekias.Core;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.DurableTask;
+using Microsoft.DurableTask.Client;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Exekias.AzureFunctions
 {
@@ -16,19 +12,19 @@ namespace Exekias.AzureFunctions
         // see https://learn.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-singletons?tabs=csharp
         public const string InstanceId = "Exekias";
 
-        public static async Task EnsureStarted(IDurableOrchestrationClient pipeline, ILogger log, PipelineOptions options)
+        public static async Task EnsureStarted(DurableTaskClient pipeline, ILogger log, PipelineOptions options)
         {
-            var status = await pipeline.GetStatusAsync(InstanceId);
+            var status = await pipeline.GetInstanceAsync(InstanceId);
             if (null == status)
             {
-                await pipeline.StartNewAsync(
+                await pipeline.ScheduleNewOrchestrationInstanceAsync(
                     nameof(Pipeline),
-                    InstanceId,
                     new PipelineInput()
                     {
                         ThresholdSeconds = options.ThresholdSeconds,
                         RunCacheTimeoutHours = options.RunCacheTimeoutHours
-                    });
+                    },
+                    new StartOrchestrationOptions(InstanceId));
                 log.LogInformation("Started orchestration {instance_id}.", InstanceId);
             }
 
@@ -38,7 +34,7 @@ namespace Exekias.AzureFunctions
         // see https://learn.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-external-events?tabs=csharp
         #region Change event
         const string ChangeOperationName = "Change";
-        static Task<FileShot> WaitForChangeEvent(IDurableOrchestrationContext context) => context.WaitForExternalEvent<FileShot>(ChangeOperationName);
+        static Task<FileShot> WaitForChangeEvent(TaskOrchestrationContext context) => context.WaitForExternalEvent<FileShot>(ChangeOperationName);
         /// <summary>
         /// Raise orchestrator Change event.
         /// </summary>
@@ -46,11 +42,11 @@ namespace Exekias.AzureFunctions
         /// <param name="data">Event data.</param>
         /// <returns>A <see cref="Task"/> that completes when the event notification message has been enqueued.</returns>
         /// <remarks>The event notifies the orchestrator that one of the files in the Run Store has been created or changed.</remarks>
-        static public Task RaiseChangeEventAsync(IDurableOrchestrationClient pipeline, FileShot data) => pipeline.RaiseEventAsync(InstanceId, ChangeOperationName, data);
+        static public Task RaiseChangeEventAsync(DurableTaskClient pipeline, FileShot data) => pipeline.RaiseEventAsync(InstanceId, ChangeOperationName, data);
         #endregion
         #region Full event
         public const string FullOperationName = "Full";
-        static Task WaitForFullEvent(IDurableOrchestrationContext context) => context.WaitForExternalEvent(FullOperationName);
+        static Task<object> WaitForFullEvent(TaskOrchestrationContext context) => context.WaitForExternalEvent<object>(FullOperationName);
         /// <summary>
         /// Raise orchestrator Full event.
         /// </summary>
@@ -58,7 +54,7 @@ namespace Exekias.AzureFunctions
         /// <param name="data">Event data.</param>
         /// <returns>A <see cref="Task"/> that completes when the event notification message has been enqueued.</returns>
         /// <remarks>The event requests full scan of Run store and Exekias store to fix inconsistencies.</remarks>
-        static public Task RaiseFullEventAsync(IDurableOrchestrationClient pipeline) => pipeline.RaiseEventAsync(InstanceId, FullOperationName);
+        static public Task RaiseFullEventAsync(DurableTaskClient pipeline) => pipeline.RaiseEventAsync(InstanceId, FullOperationName);
         #endregion region
 
         /// <summary>
@@ -67,9 +63,9 @@ namespace Exekias.AzureFunctions
         /// <param name="context"></param>
         /// <param name="logger"></param>
         /// <returns></returns>
-        [FunctionName("Pipeline")]
+        [Function("Pipeline")]
         public static async Task Pipeline(
-            [OrchestrationTrigger] IDurableOrchestrationContext context,
+            [OrchestrationTrigger] TaskOrchestrationContext context,
             ILogger logger
             )
         {
@@ -80,7 +76,11 @@ namespace Exekias.AzureFunctions
                 logger.LogError("The singleton orchestrator started with improper InstanceId {instance_id}, exiting.", context.InstanceId);
                 return;
             }
-            PipelineInput input = context.GetInput<PipelineInput>();
+            PipelineInput? input = context.GetInput<PipelineInput>();
+            if (input is null){
+                logger.LogError("The singleton orchestrator started with no input, exiting.");
+                return;
+            }
 
             // We keep a cache of recent run identifiers to minimize the number of costly DiscoverRun invocations.
             Dictionary<string, DateTimeOffset> runCache = input.runCache;
@@ -192,7 +192,7 @@ namespace Exekias.AzureFunctions
                     {
                         await TriggersAndActivities.CallUpdateRunActivityAsync(context, item.Value);
                     }
-                    catch (FunctionFailedException error)
+                    catch (TaskFailedException error)
                     {
                         logger.LogError(error, "Error while updating run {run}, ignored.", item.Key);
                     }
@@ -216,7 +216,7 @@ namespace Exekias.AzureFunctions
             context.ContinueAsNew(input, preserveUnprocessedEvents: true);
         }
 
-        static async ValueTask DoFullScan(IDurableOrchestrationContext context, ILogger logger)
+        static async ValueTask DoFullScan(TaskOrchestrationContext context, ILogger logger)
         {
             var imports = await TriggersAndActivities.CallFullScanActivityAsync(context);
             await Task.WhenAll(imports.Select(async item =>
@@ -225,7 +225,7 @@ namespace Exekias.AzureFunctions
                 {
                     await TriggersAndActivities.CallUpdateRunActivityAsync(context, item);
                 }
-                catch (FunctionFailedException error)
+                catch (TaskFailedException error)
                 {
                     logger.LogError(error, "Error while updating run {run}, ignored.", item.RunPath);
                 }

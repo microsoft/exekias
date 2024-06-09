@@ -1,23 +1,18 @@
 ﻿using Exekias.Core;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.DurableTask;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace Exekias.AzureFunctions
 {
     partial class TriggersAndActivities
     {
 
-        [FunctionName(nameof(ClassifyFiles))]
+        [Function(nameof(ClassifyFiles))]
         public Task<FileClass[]> ClassifyFiles(
-            [ActivityTrigger] IDurableActivityContext context,
+            [ActivityTrigger] FileShot[] files,
             ILogger logger)
         {
-            var files = context.GetInput<FileShot[]>();
             return Task.FromResult(files.Select(file =>
             {
                 var fileClass = new FileClass();
@@ -37,16 +32,15 @@ namespace Exekias.AzureFunctions
         /// <param name="context"></param>
         /// <param name="files"></param>
         /// <returns>A string, each character is a corresponing file class, 'M' for metadata and 'D' for importable data.</returns>
-        public static Task<FileClass[]> CallClassifyFilesActivityAsync(IDurableOrchestrationContext context, FileShot[] files)
+        public static Task<FileClass[]> CallClassifyFilesActivityAsync(TaskOrchestrationContext context, FileShot[] files)
             => context.CallActivityAsync<FileClass[]>(nameof(ClassifyFiles), files);
 
 
-        [FunctionName(nameof(UpdateRun))]
+        [Function(nameof(UpdateRun))]
         public async Task UpdateRun(
-            [ActivityTrigger] IDurableActivityContext context,
+            [ActivityTrigger]  RunData runData,
             ILogger logger)
         {
-            var runData = context.GetInput<RunData>();
             if (null == runData)
             {
                 logger.LogError("UpdateRun didn't receive run data");
@@ -97,17 +91,17 @@ namespace Exekias.AzureFunctions
         /// <param name="context"></param>
         /// <param name="run"></param>
         /// <returns>A string, each character is a corresponing file class, 'M' for metadata and 'D' for importable data.</returns>
-        public static Task CallUpdateRunActivityAsync(IDurableOrchestrationContext context, RunData run)
+        public static Task CallUpdateRunActivityAsync(TaskOrchestrationContext context, RunData run)
             => context.CallActivityAsync(nameof(UpdateRun), run);
 
-        [FunctionName(nameof(FullScan))]
+        [Function(nameof(FullScan))]
         public async Task<List<RunData>> FullScan(
-            [ActivityTrigger] IDurableActivityContext context,
-            ILogger logger)
+            [ActivityTrigger] FunctionContext executionContext)
         {
+            ILogger logger = executionContext.GetLogger(nameof(FullScan));
             logger.LogInformation("Starting full scan of Stores");
             List<RunData> imports = await steps.Compare(logger);
-            logger.LogInformation("Finished full scan of Stores, {0} runs to import.", imports.Count);
+            logger.LogInformation("Finished full scan of Stores, {count} runs to import.", imports.Count);
             return imports;
         }
 
@@ -117,7 +111,7 @@ namespace Exekias.AzureFunctions
         /// <param name="context"></param>
         /// <param name="run"></param>
         /// <returns>A string, each character is a corresponing file class, 'M' for metadata and 'D' for importable data.</returns>
-        public static Task<List<RunData>> CallFullScanActivityAsync(IDurableOrchestrationContext context)
-            => context.CallActivityAsync<List<RunData>>(nameof(FullScan), null);
+        public static Task<List<RunData>> CallFullScanActivityAsync(TaskOrchestrationContext context)
+            => context.CallActivityAsync<List<RunData>>(nameof(FullScan));
     }
 }
