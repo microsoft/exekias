@@ -44,9 +44,6 @@ resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
     ]
   }
 
-  resource dataReader 'sqlRoleDefinitions' existing = {
-    name: '00000000-0000-0000-0000-000000000001' // Cosmos DB Built-in Data Reader
-  }
   resource dataContributor 'sqlRoleDefinitions' existing = {
     name: '00000000-0000-0000-0000-000000000002' // Cosmos DB Built-in Data Contributor
   }
@@ -80,6 +77,7 @@ resource syncStore 'Microsoft.Storage/storageAccounts@2023-04-01' = {
   }
   properties: {
     allowBlobPublicAccess: false
+    allowSharedKeyAccess: false
   }
 }
 
@@ -231,12 +229,8 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
           value: storeContainer
         }
         {
-          name: 'ImportStore:ConnectionString'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${syncStore.name};AccountKey=${syncStore.listKeys().keys[0].value}'
-        }
-        {
-          name: 'ImportStore:BlobContainerName'
-          value: 'shadow-${storeContainer}'
+          name: 'ImportStore:BlobContainerUrl'
+          value: '${syncStore.properties.primaryEndpoints.blob}shadow-${storeContainer}'
         }
         {
           name: 'Pipeline:ThresholdSeconds'

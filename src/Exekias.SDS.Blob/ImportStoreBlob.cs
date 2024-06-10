@@ -1,9 +1,10 @@
-﻿using Azure.Storage.Blobs;
+﻿using Azure.Core;
+using Azure.Identity;
+using Azure.Storage.Blobs;
 using Exekias.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
-using System.Net.Http.Headers;
 using System.Threading.Tasks;
 
 namespace Exekias.SDS.Blob
@@ -13,8 +14,7 @@ namespace Exekias.SDS.Blob
         #region Configuration
         public class Options
         {
-            public string? ConnectionString { get; set; }
-            public string BlobContainerName { get; set; } = "shadow";
+            public string? BlobContainerUrl { get; set; }
         }
         #endregion
         readonly BlobContainerClient container;
@@ -28,9 +28,10 @@ namespace Exekias.SDS.Blob
         {
             if (null == configurationOptions) throw new ArgumentNullException(nameof(configurationOptions));
             var options = configurationOptions.Value;
-            if (string.IsNullOrWhiteSpace(options?.ConnectionString)) throw new ArgumentException($"Options.{nameof(Options.ConnectionString)} not configured.");
-            if (string.IsNullOrWhiteSpace(options?.BlobContainerName)) throw new ArgumentException($"Options.{nameof(Options.BlobContainerName)} not configured.");
-            container = new BlobContainerClient(options.ConnectionString, options.BlobContainerName);
+            if (string.IsNullOrWhiteSpace(options?.BlobContainerUrl)) throw new ArgumentException($"Options.{nameof(Options.BlobContainerUrl)} not configured.");
+            var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
+            var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
+            container = new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
             container.CreateIfNotExists();
             logger.LogDebug("Is 64 bit process: {is64bit}", Environment.Is64BitProcess);
             logger.LogInformation("ImportStore initialized on blobs {account}{container} with netCDF {netcdf}.", container.AccountName, container.Name, NetCDFInterop.NetCDF.nc_inq_libvers());
