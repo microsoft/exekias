@@ -11,7 +11,6 @@ using Azure.ResourceManager.Storage.Models;
 using Azure.Storage.Blobs.Specialized;
 using System.CommandLine;
 using System.CommandLine.IO;
-using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json.Nodes;
 
@@ -116,14 +115,15 @@ partial class Program
         var batchPoolId = deploymentOutput["batchPoolId"]?["value"]?.GetValue<string?>();
 
         // deploy syncFunction code from sync.zip
+        var runChangeEventSink = "RunChangeEventSink";
         WebSiteResource syncFunction = arm.Value.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
         // the deployment created a new function app. Deploy code from a package.
-        syncFunction = DeployFunctionCode(syncFunction, syncPackagePath);
+        syncFunction = DeployFunctionCode(syncFunction, syncPackagePath, runChangeEventSink);
         console.WriteLine($"Deployed package {Path.GetFileName(syncPackagePath)} to Function app {syncFunction.Id.Name}");
 
         // subscribe sync function app to the storage eventgrid events
         console.WriteLine("Subscribing backend to storage events.");
-        SiteFunctionResource update = syncFunction.GetSiteFunctions().Get("RunChangeEventSink");
+        SiteFunctionResource update = syncFunction.GetSiteFunctions().Get(runChangeEventSink);
         var topic = arm.Value.GetSystemTopicResource(new ResourceIdentifier(topicId!));
         var subscriptions = topic.GetSystemTopicEventSubscriptions();
         subscriptions.CreateOrUpdate(Azure.WaitUntil.Completed, syncFunction.Data.Name, new EventGridSubscriptionData()
@@ -139,34 +139,20 @@ partial class Program
             UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0", console));
     }
 
-    static WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath)
+    static WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath, string expected)
     {
-        // https://github.com/projectkudu/kudu/wiki/REST-API#zip-deployment
-        Uri scm = funcApp.GetPublishingCredentials(Azure.WaitUntil.Completed).Value.Data.ScmUri;
-        string zipDeployUri = $"https://{scm.Host}/api/zipdeploy?isAsync=true";
-        using var client = new HttpClient();
-        var token = credential.GetToken(new TokenRequestContext(new[] { "https://management.core.windows.net//.default" }), default);
-        var request = new HttpRequestMessage(HttpMethod.Post, zipDeployUri);
-        request.Headers.Add("Authorization", $"Bearer  {token.Token}");
-        request.Content = new StreamContent(File.OpenRead(zipPath));
-        var response = client.Send(request).EnsureSuccessStatusCode();
-        // await deployment completion
-        var deploymentLocation = response.Headers.Location; // https://msrcdiamond.scm.azurewebsites.net/api/deployments/latest?deployer=ZipDeploy&time=2023-06-27_07-14-46Z
+        var packageUrl = funcApp.GetApplicationSettings().Value.Properties["WEBSITE_RUN_FROM_PACKAGE"] ?? throw new NullReferenceException("WEBSITE_RUN_FROM_PACKAGE property not set.");
+        var blob = new Azure.Storage.Blobs.BlobClient(new Uri(packageUrl), credential);
+        blob.Upload(zipPath, overwrite: true);
+        
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        int? status = 0;
+        SiteFunctionResource? update = null;
         do
         {
             Thread.Sleep(30000); // 30 sec
-            request = new HttpRequestMessage(HttpMethod.Get, deploymentLocation);
-            request.Headers.Add("Authorization", $"Bearer  {token.Token}");
-            response = client.Send(request).EnsureSuccessStatusCode();
-            var content = response.Content.ReadFromJsonAsync<JsonObject>().Result;
-            status = content?["status"]?.GetValue<int>();
-            if (status == 3)
-            {
-                throw new ApplicationException("Failed Zip deployment");
-            }
-        } while (status != 4 && stopwatch.Elapsed < TimeSpan.FromMinutes(5));
+            update = funcApp.GetSiteFunctions().Get(expected);  // "RunChangeEventSink");
+        } while (update == null && stopwatch.Elapsed < TimeSpan.FromMinutes(5));
+
         return funcApp.Get();
     }
 
@@ -240,7 +226,7 @@ partial class Program
                     blobContainerName = AskBlobContainerName(null, storageAccount, console);
                 }
             }
-            var deploymentName = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            var deploymentName = $"exekias_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
             console.WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
             DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName, console);
             return 0;

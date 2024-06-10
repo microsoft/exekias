@@ -205,43 +205,43 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
           value: logStore.properties.InstrumentationKey
         }
         {
-          name: 'Batch:AccessKey'
+          name: 'Batch__AccessKey'
           value: batchAccount.listKeys().primary
         }
         {
-          name: 'Batch:Endpoint'
+          name: 'Batch__Endpoint'
           value: batchAccount.properties.accountEndpoint
         }
         {
-          name: 'Batch:Name'
+          name: 'Batch__Name'
           value: batchAccount.name
         }
         {
-          name: 'Batch:VmSize'
+          name: 'Batch__VmSize'
           value: batchVmSize
         }
         {
-          name: 'ExekiasCosmos:Endpoint'
+          name: 'ExekiasCosmos__Endpoint'
           value: syncMeta.properties.documentEndpoint
         }
         {
-          name: 'ExekiasCosmos:ContainerName'
+          name: 'ExekiasCosmos__ContainerName'
           value: storeContainer
         }
         {
-          name: 'ImportStore:BlobContainerUrl'
+          name: 'ImportStore__BlobContainerUrl'
           value: '${syncStore.properties.primaryEndpoints.blob}shadow-${storeContainer}'
         }
         {
-          name: 'Pipeline:ThresholdSeconds'
+          name: 'Pipeline__ThresholdSeconds'
           value: '30'
         }
         {
-          name: 'RunStore:BlobContainerUrl'
+          name: 'RunStore__BlobContainerUrl'
           value: '${runStore.properties.primaryEndpoints.blob}${storeContainer}'
         }
         {
-          name: 'RunStore:MetadataFilePattern'
+          name: 'RunStore__MetadataFilePattern'
           value: metadataFilePattern
         }
         {
