@@ -25,7 +25,7 @@ partial class Program
         }
         var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
         {
-            ConnectionString = cfg.exekiasStoreConnectionString,
+            Endpoint = cfg.exekiasStoreEndpoint,
             DatabaseName = cfg.exekiasStoreDatabaseName,
             ContainerName = cfg.exekiasStoreContainerName
         }), LoggerFactory.Create(builder =>
@@ -63,7 +63,7 @@ partial class Program
         }
         var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
         {
-            ConnectionString = cfg.exekiasStoreConnectionString,
+            Endpoint = cfg.exekiasStoreEndpoint,
             DatabaseName = cfg.exekiasStoreDatabaseName,
             ContainerName = cfg.exekiasStoreContainerName
         }), LoggerFactory.Create(builder =>
@@ -97,7 +97,7 @@ partial class Program
         }
         var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
         {
-            ConnectionString = cfg.exekiasStoreConnectionString,
+            Endpoint = cfg.exekiasStoreEndpoint,
             DatabaseName = cfg.exekiasStoreDatabaseName,
             ContainerName = cfg.exekiasStoreContainerName
         }), LoggerFactory.Create(builder =>

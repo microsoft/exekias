@@ -12,6 +12,8 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.IO;
 using System.Text.RegularExpressions;
+using Azure.Identity;
+using Azure.Core;
 
 namespace Exekias.CosmosDb
 {
@@ -23,7 +25,7 @@ namespace Exekias.CosmosDb
         /// </summary>
         public class Options
         {
-            public string? ConnectionString { get; set; }
+            public string? Endpoint { get; set; }
             public string DatabaseName { get; set; } = "Exekias";
             public string ContainerName { get; set; } = "Runs";
         }
@@ -77,9 +79,12 @@ namespace Exekias.CosmosDb
 
         async Task<Container> InitializeContainer()
         {
+            var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
+            var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
             CosmosClient dbClient = new CosmosClient(
                 //options?.ConnectionString ?? throw new NullReferenceException($"ConnectionString not configured for {typeof(Options).FullName}")
-                options?.ConnectionString ?? throw new NullReferenceException($"ConnectionString not configured for {typeof(Options).FullName}"),
+                options?.Endpoint ?? throw new NullReferenceException($"Endpoint not configured for {typeof(Options).FullName}"),
+                credential,
                 new CosmosClientOptions() { Serializer = new SystemTextJsonSerializer() }
                 );
             logger.LogInformation("CosmosDB {0}/{1} at {2}", options.DatabaseName, options.ContainerName, dbClient.Endpoint);

@@ -18,7 +18,7 @@ record ExekiasConfig(
     string resourceGroup,
     string runStoreUrl,
     string runStoreMetadataFilePattern,
-    string exekiasStoreConnectionString,
+    string exekiasStoreEndpoint,
     string exekiasStoreDatabaseName,
     string exekiasStoreContainerName)
 {
@@ -423,7 +423,7 @@ partial class Program
                 resourceGroup.Data.Name,
                 appSettings.Properties["RunStore:BlobContainerUrl"],
                 runStoreMetadataFilePattern: appSettings.Properties["RunStore:MetadataFilePattern"],
-                exekiasStoreConnectionString: appSettings.Properties["ExekiasCosmos:ConnectionString"],
+                exekiasStoreEndpoint: appSettings.Properties["ExekiasCosmos:Endpoint"],
                 exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos:DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
                 exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos:ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
                 );

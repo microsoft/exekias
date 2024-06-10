@@ -30,6 +30,8 @@ resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
   location: location
   properties: {
     databaseAccountOfferType: 'Standard'
+    disableLocalAuth: true
+    minimalTlsVersion: 'Tls12'
     locations: [
       {
         locationName: location
@@ -40,7 +42,31 @@ resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
         name: 'EnableServerless'
       }
     ]
-    minimalTlsVersion: 'Tls12'
+  }
+
+  resource dataReader 'sqlRoleDefinitions' existing = {
+    name: '00000000-0000-0000-0000-000000000001' // Cosmos DB Built-in Data Reader
+  }
+  resource dataContributor 'sqlRoleDefinitions' existing = {
+    name: '00000000-0000-0000-0000-000000000002' // Cosmos DB Built-in Data Contributor
+  }
+
+  resource syncContributorAssignment 'sqlRoleAssignments' = {
+    name: guid(syncApp.id, syncMeta.id, dataContributor.id)
+    properties: {
+      principalId: syncApp.identity.principalId
+      roleDefinitionId: dataContributor.id
+      scope: syncMeta.id
+    }
+  }
+
+  resource poolContributorAssignment 'sqlRoleAssignments' = {
+    name: guid(poolIdentity.id, syncMeta.id, dataContributor.id)
+    properties: {
+      principalId: poolIdentity.properties.principalId
+      roleDefinitionId: dataContributor.id
+      scope: syncMeta.id
+    }
   }
 }
 
@@ -58,15 +84,15 @@ resource syncStore 'Microsoft.Storage/storageAccounts@2023-04-01' = {
 }
 
 resource syncBlobService 'Microsoft.Storage/storageAccounts/blobServices@2023-04-01' = {
-    name: 'default'
-    parent: syncStore
-  }
-  
-  resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-04-01' = {
-    name: 'deployment'
-    parent: syncBlobService
-  }
-  
+  name: 'default'
+  parent: syncStore
+}
+
+resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-04-01' = {
+  name: 'deployment'
+  parent: syncBlobService
+}
+
 // Batch account
 resource batchAccount 'Microsoft.Batch/batchAccounts@2024-02-01' = {
   name: syncName
@@ -197,8 +223,8 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
           value: batchVmSize
         }
         {
-          name: 'ExekiasCosmos:ConnectionString'
-          value: syncMeta.listConnectionStrings().connectionStrings[0].connectionString
+          name: 'ExekiasCosmos:Endpoint'
+          value: syncMeta.properties.documentEndpoint
         }
         {
           name: 'ExekiasCosmos:ContainerName'
@@ -346,16 +372,15 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2020-10-01' = {
 }
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2022-03-01' = {
-    name: 'exekias'
-    location: location
-    sku: {
-      name: 'Y1'
-      tier: 'Dynamic'
-      size: 'Y1'
-      family: 'Y'
-    }
-    properties: {
-      reserved: true  // Linux
-    }
+  name: 'exekias'
+  location: location
+  sku: {
+    name: 'Y1'
+    tier: 'Dynamic'
+    size: 'Y1'
+    family: 'Y'
   }
-  
+  properties: {
+    reserved: true // Linux
+  }
+}
