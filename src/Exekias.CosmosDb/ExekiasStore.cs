@@ -77,7 +77,7 @@ namespace Exekias.CosmosDb
             return triggerReader.ReadToEnd();
         });
 
-        async Task<Container> InitializeContainer()
+        Task<Container> InitializeContainer()
         {
             var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
             var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
@@ -88,32 +88,7 @@ namespace Exekias.CosmosDb
                 new CosmosClientOptions() { Serializer = new SystemTextJsonSerializer() }
                 );
             logger.LogInformation("CosmosDB {0}/{1} at {2}", options.DatabaseName, options.ContainerName, dbClient.Endpoint);
-            Database database = await dbClient.CreateDatabaseIfNotExistsAsync(options.DatabaseName);
-            Container container = await database.CreateContainerIfNotExistsAsync(options.ContainerName, "/run");
-            // Create trigger if not exists
-            try
-            {
-                await container.Scripts.ReadTriggerAsync(TriggerId);
-            }
-            catch (CosmosException ex)
-            {
-                if (ex.StatusCode == HttpStatusCode.NotFound)
-                {
-                    logger.LogDebug("Adding trigger script {trigger} to container {container}.", TriggerId, container.Id);
-                    await container.Scripts.CreateTriggerAsync(new TriggerProperties()
-                    {
-                        Id = TriggerId,
-                        Body = UpdateRunObjectTrigger.Value,
-                        TriggerOperation = TriggerOperation.All,
-                        TriggerType = TriggerType.Post
-                    });
-                }
-                else
-                {
-                    throw;
-                }
-            }
-            return container;
+            return Task.FromResult(dbClient.GetContainer(options.DatabaseName, options.ContainerName));
         }
 
         public async ValueTask<ExekiasObject?> GetMetaObject(string runId)

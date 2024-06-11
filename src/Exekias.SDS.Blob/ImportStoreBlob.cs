@@ -34,7 +34,16 @@ namespace Exekias.SDS.Blob
             container = new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
             container.CreateIfNotExists();
             logger.LogDebug("Is 64 bit process: {is64bit}", Environment.Is64BitProcess);
-            logger.LogInformation("ImportStore initialized on blobs {account}{container} with netCDF {netcdf}.", container.AccountName, container.Name, NetCDFInterop.NetCDF.nc_inq_libvers());
+            string netcdfVersion = "unavailable";
+            try
+            {
+                netcdfVersion = NetCDFInterop.NetCDF.nc_inq_libvers();
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to load netCDF library.");
+            }
+            logger.LogInformation("ImportStore initialized on blobs {account}{container} with netCDF {netcdf}.", container.AccountName, container.Name, netcdfVersion);
         }
 
         public override async ValueTask<LocalFile> GetDataSetFile(ExekiasObject runObject)

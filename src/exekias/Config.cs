@@ -421,11 +421,11 @@ partial class Program
             var cfg = new ExekiasConfig(
                 subscriptionResource.Id.ToString(),
                 resourceGroup.Data.Name,
-                appSettings.Properties["RunStore:BlobContainerUrl"],
-                runStoreMetadataFilePattern: appSettings.Properties["RunStore:MetadataFilePattern"],
-                exekiasStoreEndpoint: appSettings.Properties["ExekiasCosmos:Endpoint"],
-                exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos:DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
-                exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos:ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
+                appSettings.Properties["RunStore__BlobContainerUrl"],
+                runStoreMetadataFilePattern: appSettings.Properties["RunStore__MetadataFilePattern"],
+                exekiasStoreEndpoint: appSettings.Properties["ExekiasCosmos__Endpoint"],
+                exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos__DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
+                exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos__ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
                 );
             using var file = cfgFile.OpenWrite();
             JsonSerializer.Serialize(file, cfg);

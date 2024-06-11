@@ -13,6 +13,15 @@ var syncFunctionName = '${syncName}-${storeContainer}'
 // RunStore storage
 resource runStore 'Microsoft.Storage/storageAccounts@2023-04-01' existing = {
   name: runStoreName
+
+  resource blobService 'blobServices' = {
+    name: 'default'
+    
+    resource runStoreContainer 'containers' = {
+      name: storeContainer
+      
+    }
+  }
 }
 
 resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
@@ -42,6 +51,87 @@ resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
         name: 'EnableServerless'
       }
     ]
+  }
+
+  resource db 'sqlDatabases' = {
+    name: 'Exekias'
+    properties: {
+      resource: {
+        id: 'Exekias'
+      }
+    }
+
+    resource container 'containers' = {
+      name: storeContainer
+      properties: {
+        resource: {
+          id: storeContainer
+          partitionKey: {
+            paths: [
+              '/run'
+            ]
+            kind: 'Hash'
+          }
+        }
+      }
+      resource trigger 'triggers' = {
+        name: 'updateRunObject'
+        properties: {
+          resource:{
+            id: 'updateRunObject'
+            triggerType: 'Post'
+            triggerOperation: 'All'
+            body: '''
+// Cosmos DB post-trigger that updates run object after updating thw file object
+function updateMetadata() {
+    var context = getContext();
+    var container = context.getCollection();
+    var response = context.getResponse();
+
+    // item that was created
+    var fileItem = response.getBody();
+
+    var accept = container.readDocument(`${container.getAltLink()}/docs/$`, updateMetadataCallback);
+    if (!accept) throw "readDocument declined, abort";
+
+    function updateMetadataCallback(err, runItem) {
+        if (err) throw new Error("Error" + err.message);
+
+        if (!runItem) throw 'Unable to read run object';
+
+        var changed = false;
+        for (const source in fileItem.variables) {
+            if (runItem.variables && runItem.variables[source]) {
+                const v_set = new Set(runItem.variables[source]);
+                const s_set = v_set.size;
+                for (const v of fileItem.variables[source]) v_set.add(v);
+                if (v_set.size > s_set) {
+                    runItem.variables[source] = [...v_set];
+                    changed = true;
+                }
+            } else {
+                if (runItem.variables) {
+                    runItem.variables[source] = fileItem.variables[source];
+                } else {
+                    runItem.variables = fileItem.variables;
+                }
+                changed = true;
+            }
+        }
+        if (changed) {
+            var accept = container.replaceDocument(runItem._self,
+                runItem, function (err) {
+                    if (err) throw "Unable to update run object, abort";
+                });
+            if (!accept) throw "Run object update declined, abort";
+        }
+        return;
+    }
+}'''
+          }
+        }
+      }
+    }
   }
 
   resource dataContributor 'sqlRoleDefinitions' existing = {
@@ -347,6 +437,7 @@ output syncFunctionId string = syncApp.id
 output topicId string = topic.id
 output batchAccountId string = batchAccount.id
 output batchPoolId string = batchPool.id
+output metaStoreId string = syncMeta.id
 
 // additional resources
 

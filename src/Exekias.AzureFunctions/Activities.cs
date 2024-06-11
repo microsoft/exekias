@@ -10,8 +10,7 @@ namespace Exekias.AzureFunctions
 
         [Function(nameof(ClassifyFiles))]
         public Task<FileClass[]> ClassifyFiles(
-            [ActivityTrigger] FileShot[] files,
-            ILogger logger)
+            [ActivityTrigger] FileShot[] files)
         {
             return Task.FromResult(files.Select(file =>
             {
@@ -38,8 +37,7 @@ namespace Exekias.AzureFunctions
 
         [Function(nameof(UpdateRun))]
         public async Task UpdateRun(
-            [ActivityTrigger]  RunData runData,
-            ILogger logger)
+            [ActivityTrigger]  RunData runData)
         {
             if (null == runData)
             {

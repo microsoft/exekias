@@ -9,6 +9,7 @@ using Microsoft.DurableTask.Client;
 namespace Exekias.AzureFunctions
 {
     public partial class TriggersAndActivities(
+        ILogger<TriggersAndActivities> logger,
         IOptions<PipelineOptions> options,
         Steps steps,
         IRunStore runStore,
@@ -38,8 +39,7 @@ namespace Exekias.AzureFunctions
         [Function(nameof(RunChangeEventSink))]
         public async Task RunChangeEventSink(
             [EventGridTrigger] Azure.Messaging.EventGrid.EventGridEvent incomingEvent,
-            [DurableClient] DurableTaskClient pipeline,
-            ILogger logger)
+            [DurableClient] DurableTaskClient pipeline)
         {
             if (incomingEvent.EventType == "Microsoft.Storage.BlobCreated")
             {
@@ -81,68 +81,66 @@ namespace Exekias.AzureFunctions
         [Function(nameof(Housekeeper))]
         public async Task Housekeeper(
             [TimerTrigger("0 1 2 * * *")] TimerInfo myTimer,
-            [DurableClient] DurableTaskClient pipeline,
-            ILogger log)
+            [DurableClient] DurableTaskClient pipeline)
         {
-            log.LogDebug("Housekeeper timer trigger function executed at: {timeUtc}, last {last}", DateTime.Now, myTimer.ScheduleStatus?.Last);
-            await Orchestrator.EnsureStarted(pipeline, log, options);
+            logger.LogDebug("Housekeeper timer trigger function executed at: {timeUtc}, last {last}", DateTime.Now, myTimer.ScheduleStatus?.Last);
+            await Orchestrator.EnsureStarted(pipeline, logger, options);
             await Orchestrator.RaiseFullEventAsync(pipeline);
-            log.LogInformation("Registered full scan.");
+            logger.LogInformation("Registered full scan.");
         }
 
 
 
         [Function("Debug")]
-        public async Task<string> Debug(
+        public async Task<HttpResponseData> Debug(
             [HttpTrigger(AuthorizationLevel.Admin, "get", "post")] HttpRequestData req,
-            [DurableClient] DurableTaskClient starter,
-            ILogger log, PipelineOptions options)
+            [DurableClient] DurableTaskClient starter)
         {
             OrchestrationMetadata? status = null;
             string? command = req.Query["command"];
             if (null == command || "full".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
-                await Orchestrator.EnsureStarted(starter, log, options);
+                await Orchestrator.EnsureStarted(starter, logger, options);
                 await Orchestrator.RaiseFullEventAsync(starter);
-                log.LogInformation("Registered full scan.");
+                logger.LogInformation("Registered full scan.");
             }
             else if ("update".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
                 var path = await req.ReadAsStringAsync();
                 if (path == null)
                 {
-                    log.LogWarning("Expecting path as the request content, ignore the request.");
+                    logger.LogWarning("Expecting path as the request content, ignore the request.");
                 }
                 else
                 {
                     if (string.IsNullOrWhiteSpace(path))
                     {
-                        log.LogError("Path is empty, ignore the request.");
+                        logger.LogError("Path is empty, ignore the request.");
                     }
                     else
                     {
-                        await Orchestrator.EnsureStarted(starter, log, options);
+                        await Orchestrator.EnsureStarted(starter, logger, options);
                         await Orchestrator.RaiseChangeEventAsync(starter, new FileShot(path, DateTimeOffset.Now));
-                        log.LogInformation("Registered an update for {path}.", path);
+                        logger.LogInformation("Registered an update for {path}.", path);
                     }
                 }
             }
             else if ("restart".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
-                await Orchestrator.EnsureStarted(starter, log, options);
+                await Orchestrator.EnsureStarted(starter, logger, options);
             }
             else if ("purge".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
                 status = await starter.GetInstanceAsync(Orchestrator.InstanceId);
                 if (null == status)
                 {
-                    log.LogError("Instance didn't start yet.");
+                    logger.LogError("Instance didn't start yet.");
                 }
                 else if (status.RuntimeStatus != OrchestrationRuntimeStatus.Terminated
                     && status.RuntimeStatus != OrchestrationRuntimeStatus.Completed
                     && status.RuntimeStatus != OrchestrationRuntimeStatus.Failed)
                 {
-                    log.LogWarning("Instance not terminated yet, requesting termination. Wait until the status is Terminated and try purge again.");
+                    logger.LogWarning("Instance not terminated yet, requesting termination. Wait until the status is Terminated and try purge again.");
                     await starter.TerminateInstanceAsync(Orchestrator.InstanceId, "purge requested");
                 }
                 else
@@ -150,22 +148,25 @@ namespace Exekias.AzureFunctions
                     var purgeResult = await starter.PurgeInstanceAsync(Orchestrator.InstanceId);
                     if (purgeResult?.PurgedInstanceCount > 0)
                     {
-                        log.LogInformation("Deleted {number} instances, restarting.", purgeResult?.PurgedInstanceCount);
+                        logger.LogInformation("Deleted {number} instances, restarting.", purgeResult?.PurgedInstanceCount);
                         status = await starter.GetInstanceAsync(Orchestrator.InstanceId);
                         if (null == status)
                         {
-                            await Orchestrator.EnsureStarted(starter, log, options);
-                            log.LogInformation("Started orchestration.");
+                            await Orchestrator.EnsureStarted(starter, logger, options);
+                            logger.LogInformation("Started orchestration.");
                         }
                         else
                         {
-                            await Orchestrator.EnsureStarted(starter, log, options);
+                            await Orchestrator.EnsureStarted(starter, logger, options);
                         }
                     }
                 }
             }
             status = await starter.GetInstanceAsync(Orchestrator.InstanceId);
-            return null == status ? "not started" : status.RuntimeStatus.ToString();
+            var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
+            response.Headers.Add("Content-Type", "text/plain; charset=utf-8");
+            await response.WriteStringAsync($"Status: {status?.RuntimeStatus.ToString() ?? "not started"}");
+            return response;
         }
     }
 

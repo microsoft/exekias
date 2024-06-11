@@ -65,10 +65,9 @@ namespace Exekias.AzureFunctions
         /// <returns></returns>
         [Function("Pipeline")]
         public static async Task Pipeline(
-            [OrchestrationTrigger] TaskOrchestrationContext context,
-            ILogger logger
-            )
+            [OrchestrationTrigger] TaskOrchestrationContext context)
         {
+            var logger = context.CreateReplaySafeLogger("Pipeline");
             // WARNING!! The Orchestrator code MUST be deterministic.
             // See https://learn.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-code-constraints?tabs=csharp
             if (InstanceId != context.InstanceId)

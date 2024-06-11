@@ -1,7 +1,11 @@
 ﻿using Azure.Core;
 using Azure.ResourceManager.AppService;
+using Azure.ResourceManager.Authorization;
+using Azure.ResourceManager.Authorization.Models;
 using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Batch.Models;
+using Azure.ResourceManager.CosmosDB;
+using Azure.ResourceManager.CosmosDB.Models;
 using Azure.ResourceManager.EventGrid;
 using Azure.ResourceManager.EventGrid.Models;
 using Azure.ResourceManager.Resources;
@@ -113,6 +117,7 @@ partial class Program
         var topicId = deploymentOutput["topicId"]?["value"]?.GetValue<string?>();
         var batchAccountId = deploymentOutput["batchAccountId"]?["value"]?.GetValue<string?>();
         var batchPoolId = deploymentOutput["batchPoolId"]?["value"]?.GetValue<string?>();
+        var metaStoreId = deploymentOutput["metaStoreId"]?["value"]?.GetValue<string?>();
 
         // deploy syncFunction code from sync.zip
         var runChangeEventSink = "RunChangeEventSink";
@@ -137,6 +142,14 @@ partial class Program
         console.WriteLine("Adding application package to batch account.");
         PoolAssignApplication(batchPoolId!,
             UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0", console));
+
+        var token = credential.GetToken(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
+        string base64Payload = token.Token.Split('.')[1];
+        var paddingLength = (4 - base64Payload.Length % 4) % 4;
+        var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
+        var principalId = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement.GetProperty("oid").GetGuid();
+        CosmosDBAccountResource metaStore = arm.Value.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
+        AuthorizeCredentials(runStore, metaStore, principalId, console);
     }
 
     static WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath, string expected)
@@ -144,7 +157,7 @@ partial class Program
         var packageUrl = funcApp.GetApplicationSettings().Value.Properties["WEBSITE_RUN_FROM_PACKAGE"] ?? throw new NullReferenceException("WEBSITE_RUN_FROM_PACKAGE property not set.");
         var blob = new Azure.Storage.Blobs.BlobClient(new Uri(packageUrl), credential);
         blob.Upload(zipPath, overwrite: true);
-        
+
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         SiteFunctionResource? update = null;
         do
@@ -182,6 +195,44 @@ partial class Program
         {
             ApplicationPackages = { appReference }
         });
+    }
+
+    static void AuthorizeCredentials(
+        StorageAccountResource data,
+        CosmosDBAccountResource meta,
+        Guid principalId,
+        IConsole console)
+    {
+        var blobRole = "Storage Blob Data Contributor";
+        var blobDataContributorRole = data
+            .GetAuthorizationRoleDefinitions()
+            .GetAll()
+            .FirstOrDefault(r => r.Data.RoleName == blobRole)
+            ?.Data ?? throw new InvalidOperationException($"Cannot find {blobRole} role definition.");
+        if (data.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != blobDataContributorRole.Id))
+        {
+            data.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
+                roleDefinitionId: blobDataContributorRole.Id,
+                principalId: principalId));
+            console.WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description} role.");
+        }
+
+        var cosmosRole = "Cosmos DB Built-in Data Contributor";
+        var cosmosSqlReaderRole = meta
+            .GetCosmosDBSqlRoleDefinitions()
+            .GetAll()
+            .FirstOrDefault(r => r.Data.RoleName == cosmosRole)
+            ?.Data ?? throw new InvalidOperationException($"Cannot find {cosmosRole} role definition.");
+        if (meta.GetCosmosDBSqlRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != cosmosSqlReaderRole.Id))
+        {
+            meta.GetCosmosDBSqlRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new CosmosDBSqlRoleAssignmentCreateOrUpdateContent()
+            {
+                RoleDefinitionId = cosmosSqlReaderRole.Id,
+                PrincipalId = principalId,
+                Scope = meta.Id
+            });
+            console.WriteLine($"Authorized {principalId} to access Cosmos DB account {meta.Id.Name} as {cosmosRole}.");
+        }
     }
 
     static int DoBackendDeploy(
