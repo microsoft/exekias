@@ -16,11 +16,10 @@ namespace Exekias.AzureStorageEmulator.Tests
     {
         readonly string blobContainerName = Guid.NewGuid().ToString("N");
         readonly BlobContainerClient container;
-        IOptions<RunStoreBlobContainer.Options> MakeOptions(string cs = "", string bcn = "", string mfp = "") =>
+        IOptions<RunStoreBlobContainer.Options> MakeOptions(string bcn = "", string mfp = "") =>
            Options.Create(new RunStoreBlobContainer.Options()
            {
-               ConnectionString = cs == "" ? StorageEmulatorFixture.ConnectionString : cs,
-               BlobContainerName = bcn == "" ? blobContainerName : bcn,
+               BlobContainerUrl = bcn == "" ? "§" + blobContainerName : bcn,
                MetadataFilePattern = mfp == "" ? TestPattern : mfp,
                CacheAll = false
            });
@@ -47,10 +46,6 @@ namespace Exekias.AzureStorageEmulator.Tests
         [Fact]
         public void Ctor_throws()
         {
-            Assert.Throws<InvalidOperationException>(() => new RunStoreBlobContainer(
-                MakeOptions(cs:null),
-                new Core.Tests.ImporterMock(),
-                new NullLogger<RunStoreBlobContainer>()));
             Assert.Throws<InvalidOperationException>(() => new RunStoreBlobContainer(
                 MakeOptions(bcn: null),
                 new Core.Tests.ImporterMock(),

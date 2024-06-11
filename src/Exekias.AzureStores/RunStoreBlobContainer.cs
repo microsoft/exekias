@@ -53,7 +53,9 @@ namespace Exekias.AzureStores
                 throw new InvalidOperationException("BlobContainerUrl not configured");
             var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
             var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
-            ContainerClient = new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
+            ContainerClient = options.BlobContainerUrl.StartsWith("§") 
+                ? new BlobContainerClient("UseDevelopmentStorage=true", options.BlobContainerUrl.Substring(1))
+                : new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
             logger.LogInformation("Runs are in {0}", ContainerClient.Uri);
         }
         protected override async Task<IEnumerable<RunFile>> TraverseAll() =>

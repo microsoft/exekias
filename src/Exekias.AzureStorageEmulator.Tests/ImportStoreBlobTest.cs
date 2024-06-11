@@ -16,8 +16,7 @@ namespace Exekias.AzureStorageEmulator.Tests
             importer = new Exekias.SDS.DataImporter(new Exekias.DataImporterPart.CSV());
             store = new ImportStoreBlob(Microsoft.Extensions.Options.Options.Create(new ImportStoreBlob.Options()
             {
-                ConnectionString = StorageEmulatorFixture.ConnectionString,
-                BlobContainerName = blobContainerName
+                BlobContainerUrl = "§" + blobContainerName
             }), importer, new NullLogger<ImportStoreBlob>());
             new BlobContainerClient(StorageEmulatorFixture.ConnectionString, blobContainerName).CreateIfNotExists();
         }

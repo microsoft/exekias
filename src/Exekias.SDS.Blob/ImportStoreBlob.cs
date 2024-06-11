@@ -31,7 +31,9 @@ namespace Exekias.SDS.Blob
             if (string.IsNullOrWhiteSpace(options?.BlobContainerUrl)) throw new ArgumentException($"Options.{nameof(Options.BlobContainerUrl)} not configured.");
             var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
             var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
-            container = new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
+            container = options.BlobContainerUrl.StartsWith("§") 
+                ? new BlobContainerClient("UseDevelopmentStorage=true", options.BlobContainerUrl.Substring(1))
+                : new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
             container.CreateIfNotExists();
             logger.LogDebug("Is 64 bit process: {is64bit}", Environment.Is64BitProcess);
             string netcdfVersion = "unavailable";
