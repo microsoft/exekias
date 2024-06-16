@@ -291,8 +291,8 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
           value: '~4'
         }
         {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: logStore.properties.InstrumentationKey
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: logStore.properties.ConnectionString
         }
         {
           name: 'Batch__AccessKey'
