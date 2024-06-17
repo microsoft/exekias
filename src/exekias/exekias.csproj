@@ -36,7 +36,9 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<AdditionalProject Include="..\Exekias.DataImport\Exekias.DataImport.csproj" />
+		<AdditionalProject Include="..\Exekias.DataImport\Exekias.DataImport.csproj">
+			<MSBuildProperties>MSBuildProperties=win-x64;SelfContained=false</MSBuildProperties>
+		</AdditionalProject>
 		<AdditionalProject Include="..\Exekias.AzureFunctions\Exekias.AzureFunctions.csproj">
 			<MSBuildProperties>MSBuildProperties=linux-x64;SelfContained=false</MSBuildProperties>
 		</AdditionalProject>
