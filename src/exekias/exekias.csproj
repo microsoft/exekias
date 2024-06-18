@@ -8,11 +8,13 @@
 	</PropertyGroup>
 	<Import Project="../../Version.proj" />
 	<ItemGroup>
-		<PackageReference Include="Azure.Bicep.MSBuild" Version="0.17.1" />
-		<PackageReference Include="Azure.Bicep.CommandLine.win-x64" Version="0.17.1" />
-		<PackageReference Include="Azure.Identity" Version="1.11.0" />
+		<PackageReference Include="Azure.Bicep.MSBuild" Version="0.27.1" />
+		<PackageReference Include="Azure.Bicep.CommandLine.win-x64" Version="0.27.1" />
+		<PackageReference Include="Azure.Identity" Version="1.11.3" />
 		<PackageReference Include="Azure.ResourceManager.AppService" Version="1.0.1" />
-		<PackageReference Include="Azure.ResourceManager.Batch" Version="1.1.1" />
+		<PackageReference Include="Azure.ResourceManager.Authorization" Version="1.1.3" />
+		<PackageReference Include="Azure.ResourceManager.Batch" Version="1.4.0" />
+		<PackageReference Include="Azure.ResourceManager.CosmosDB" Version="1.3.2" />
 		<PackageReference Include="Azure.ResourceManager.EventGrid" Version="1.0.1" />
 		<PackageReference Include="Azure.ResourceManager.Resources" Version="1.4.0" />
 		<PackageReference Include="Azure.ResourceManager.Storage" Version="1.1.1" />
@@ -34,8 +36,12 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<AdditionalProject Include="..\Exekias.DataImport\Exekias.DataImport.csproj" />
-		<AdditionalProject Include="..\Exekias.AzureFunctions\Exekias.AzureFunctions.csproj" />
+		<AdditionalProject Include="..\Exekias.DataImport\Exekias.DataImport.csproj">
+			<MSBuildProperties>RuntimeIdentifier=win-x64;SelfContained=false</MSBuildProperties>
+		</AdditionalProject>
+		<AdditionalProject Include="..\Exekias.AzureFunctions\Exekias.AzureFunctions.csproj">
+			<MSBuildProperties>RuntimeIdentifier=linux-x64;SelfContained=false</MSBuildProperties>
+		</AdditionalProject>
 	</ItemGroup>
 	
 	<!--
@@ -45,8 +51,8 @@
 	-->
 	<Target Name="CopyAdditionalZipPackages" AfterTargets="Publish">
 		<Copy SourceFiles="$(TargetDir)main.json" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
-		<MSBuild Projects="@(AdditionalProject)" Targets="Restore" Properties="RuntimeIdentifier=win-x64;SelfContained=false;IsRestoring=true" />
-		<MSBuild Projects="@(AdditionalProject)" Targets="Build;Publish" Properties="RuntimeIdentifier=win-x64;SelfContained=false;PublishDir=bin/exekias" />
+		<MSBuild Projects="@(AdditionalProject)" Targets="Restore" Properties="IsRestoring=true;%(AdditionalProject.MSBuildProperties)" />
+		<MSBuild Projects="@(AdditionalProject)" Targets="Build;Publish" Properties="PublishDir=bin/exekias;%(AdditionalProject.MSBuildProperties)" />
 		<ZipDirectory SourceDirectory="@(AdditionalProject->'%(RootDir)%(Directory)bin/exekias')" DestinationFile="$(PublishDir)%(AdditionalProject.FileName).zip" Overwrite="true" />
 	</Target>
 

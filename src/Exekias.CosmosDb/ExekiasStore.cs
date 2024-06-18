@@ -12,6 +12,8 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.IO;
 using System.Text.RegularExpressions;
+using Azure.Identity;
+using Azure.Core;
 
 namespace Exekias.CosmosDb
 {
@@ -23,7 +25,7 @@ namespace Exekias.CosmosDb
         /// </summary>
         public class Options
         {
-            public string? ConnectionString { get; set; }
+            public string? Endpoint { get; set; }
             public string DatabaseName { get; set; } = "Exekias";
             public string ContainerName { get; set; } = "Runs";
         }
@@ -75,40 +77,18 @@ namespace Exekias.CosmosDb
             return triggerReader.ReadToEnd();
         });
 
-        async Task<Container> InitializeContainer()
+        Task<Container> InitializeContainer()
         {
+            var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
+            var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
             CosmosClient dbClient = new CosmosClient(
                 //options?.ConnectionString ?? throw new NullReferenceException($"ConnectionString not configured for {typeof(Options).FullName}")
-                options?.ConnectionString ?? throw new NullReferenceException($"ConnectionString not configured for {typeof(Options).FullName}"),
+                options?.Endpoint ?? throw new NullReferenceException($"Endpoint not configured for {typeof(Options).FullName}"),
+                credential,
                 new CosmosClientOptions() { Serializer = new SystemTextJsonSerializer() }
                 );
             logger.LogInformation("CosmosDB {0}/{1} at {2}", options.DatabaseName, options.ContainerName, dbClient.Endpoint);
-            Database database = await dbClient.CreateDatabaseIfNotExistsAsync(options.DatabaseName);
-            Container container = await database.CreateContainerIfNotExistsAsync(options.ContainerName, "/run");
-            // Create trigger if not exists
-            try
-            {
-                await container.Scripts.ReadTriggerAsync(TriggerId);
-            }
-            catch (CosmosException ex)
-            {
-                if (ex.StatusCode == HttpStatusCode.NotFound)
-                {
-                    logger.LogDebug("Adding trigger script {trigger} to container {container}.", TriggerId, container.Id);
-                    await container.Scripts.CreateTriggerAsync(new TriggerProperties()
-                    {
-                        Id = TriggerId,
-                        Body = UpdateRunObjectTrigger.Value,
-                        TriggerOperation = TriggerOperation.All,
-                        TriggerType = TriggerType.Post
-                    });
-                }
-                else
-                {
-                    throw;
-                }
-            }
-            return container;
+            return Task.FromResult(dbClient.GetContainer(options.DatabaseName, options.ContainerName));
         }
 
         public async ValueTask<ExekiasObject?> GetMetaObject(string runId)

@@ -1,16 +1,20 @@
 ﻿using Azure.Core;
 using Azure.ResourceManager.AppService;
+using Azure.ResourceManager.Authorization;
+using Azure.ResourceManager.Authorization.Models;
 using Azure.ResourceManager.Batch;
 using Azure.ResourceManager.Batch.Models;
+using Azure.ResourceManager.CosmosDB;
+using Azure.ResourceManager.CosmosDB.Models;
 using Azure.ResourceManager.EventGrid;
 using Azure.ResourceManager.EventGrid.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
 using Azure.ResourceManager.Storage;
+using Azure.ResourceManager.Storage.Models;
 using Azure.Storage.Blobs.Specialized;
 using System.CommandLine;
 using System.CommandLine.IO;
-using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json.Nodes;
 
@@ -82,8 +86,14 @@ partial class Program
             (new[] { templatePath, syncPackagePath, tablesPath }).Where(p => !File.Exists(p)));
         if (dontExist.Length > 0) { throw new InvalidOperationException($"Cannot find the following file(s): {dontExist}"); }
 
+        // Ensure run storage doesn't allow public access and shared keys
+        runStore.Update(new StorageAccountPatch()
+        {
+            AllowBlobPublicAccess = false,
+            AllowSharedKeyAccess = false
+        });
         // Deploy ARM resources using template file
-        ArmDeploymentResource deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed, 
+        ArmDeploymentResource deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed,
             deploymentName,
             new ArmDeploymentContent(
                 new ArmDeploymentProperties(ArmDeploymentMode.Incremental)
@@ -106,16 +116,19 @@ partial class Program
         var syncFunctionId = deploymentOutput["syncFunctionId"]?["value"]?.GetValue<string?>();
         var topicId = deploymentOutput["topicId"]?["value"]?.GetValue<string?>();
         var batchAccountId = deploymentOutput["batchAccountId"]?["value"]?.GetValue<string?>();
+        var batchPoolId = deploymentOutput["batchPoolId"]?["value"]?.GetValue<string?>();
+        var metaStoreId = deploymentOutput["metaStoreId"]?["value"]?.GetValue<string?>();
 
         // deploy syncFunction code from sync.zip
+        var runChangeEventSink = "RunChangeEventSink";
         WebSiteResource syncFunction = arm.Value.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
         // the deployment created a new function app. Deploy code from a package.
-        syncFunction = DeployFunctionCode(syncFunction, syncPackagePath);
+        syncFunction = DeployFunctionCode(syncFunction, syncPackagePath, runChangeEventSink);
         console.WriteLine($"Deployed package {Path.GetFileName(syncPackagePath)} to Function app {syncFunction.Id.Name}");
 
         // subscribe sync function app to the storage eventgrid events
         console.WriteLine("Subscribing backend to storage events.");
-        SiteFunctionResource update = syncFunction.GetSiteFunctions().Get("RunChangeEventSink");
+        SiteFunctionResource update = syncFunction.GetSiteFunctions().Get(runChangeEventSink);
         var topic = arm.Value.GetSystemTopicResource(new ResourceIdentifier(topicId!));
         var subscriptions = topic.GetSystemTopicEventSubscriptions();
         subscriptions.CreateOrUpdate(Azure.WaitUntil.Completed, syncFunction.Data.Name, new EventGridSubscriptionData()
@@ -127,41 +140,36 @@ partial class Program
         });
 
         console.WriteLine("Adding application package to batch account.");
-        UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0", console);
+        PoolAssignApplication(batchPoolId!,
+            UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0", console));
+
+        var token = credential.GetToken(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
+        string base64Payload = token.Token.Split('.')[1];
+        var paddingLength = (4 - base64Payload.Length % 4) % 4;
+        var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
+        var principalId = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement.GetProperty("oid").GetGuid();
+        CosmosDBAccountResource metaStore = arm.Value.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
+        AuthorizeCredentials(runStore, metaStore, principalId, console);
     }
 
-    static WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath)
+    static WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath, string expected)
     {
-        // https://github.com/projectkudu/kudu/wiki/REST-API#zip-deployment
-        Uri scm = funcApp.GetPublishingCredentials(Azure.WaitUntil.Completed).Value.Data.ScmUri;
-        string zipDeployUri = $"https://{scm.Host}/api/zipdeploy?isAsync=true";
-        using var client = new HttpClient();
-        var token = credential.GetToken(new TokenRequestContext(new[] { "https://management.core.windows.net//.default" }), default);
-        var request = new HttpRequestMessage(HttpMethod.Post, zipDeployUri);
-        request.Headers.Add("Authorization", $"Bearer  {token.Token}");
-        request.Content = new StreamContent(File.OpenRead(zipPath));
-        var response = client.Send(request).EnsureSuccessStatusCode();
-        // await deployment completion
-        var deploymentLocation = response.Headers.Location; // https://msrcdiamond.scm.azurewebsites.net/api/deployments/latest?deployer=ZipDeploy&time=2023-06-27_07-14-46Z
+        var packageUrl = funcApp.GetApplicationSettings().Value.Properties["WEBSITE_RUN_FROM_PACKAGE"] ?? throw new NullReferenceException("WEBSITE_RUN_FROM_PACKAGE property not set.");
+        var blob = new Azure.Storage.Blobs.BlobClient(new Uri(packageUrl), credential);
+        blob.Upload(zipPath, overwrite: true);
+
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        int? status = 0;
+        SiteFunctionResource? update = null;
         do
         {
             Thread.Sleep(30000); // 30 sec
-            request = new HttpRequestMessage(HttpMethod.Get, deploymentLocation);
-            request.Headers.Add("Authorization", $"Bearer  {token.Token}");
-            response = client.Send(request).EnsureSuccessStatusCode();
-            var content = response.Content.ReadFromJsonAsync<JsonObject>().Result;
-            status = content?["status"]?.GetValue<int>();
-            if (status == 3)
-            {
-                throw new ApplicationException("Failed Zip deployment");
-            }
-        } while (status != 4 && stopwatch.Elapsed < TimeSpan.FromMinutes(5));
+            update = funcApp.GetSiteFunctions().Get(expected);  // "RunChangeEventSink");
+        } while (update == null && stopwatch.Elapsed < TimeSpan.FromMinutes(5));
+
         return funcApp.Get();
     }
 
-    static void UploadBatchApplicationPackage(string packagePath, string batchAccountId, string appName, string version, IConsole console)
+    static BatchApplicationPackageReference UploadBatchApplicationPackage(string packagePath, string batchAccountId, string appName, string version, IConsole console)
     {
         var batchAccount = arm.Value.GetBatchAccountResource(new ResourceIdentifier(batchAccountId!));
         BatchApplicationResource batchAccountApplication = batchAccount
@@ -177,6 +185,54 @@ partial class Program
         blobClient.Upload(packageStream);
         console.WriteLine($"Uploaded app package {Path.GetFileName(packagePath)} to Batch Service {batchAccount.Id.Name} as {appName} v.{version}");
         appPackage.Activate(new BatchApplicationPackageActivateContent("zip"));
+        return new BatchApplicationPackageReference(batchAccountApplication.Id) { Version = version };
+    }
+
+    static void PoolAssignApplication(string batchPoolId, BatchApplicationPackageReference appReference)
+    {
+        var batchPool = arm.Value.GetBatchAccountPoolResource(new ResourceIdentifier(batchPoolId!));
+        batchPool.Update(new BatchAccountPoolData()
+        {
+            ApplicationPackages = { appReference }
+        });
+    }
+
+    static void AuthorizeCredentials(
+        StorageAccountResource data,
+        CosmosDBAccountResource meta,
+        Guid principalId,
+        IConsole console)
+    {
+        var blobRole = "Storage Blob Data Contributor";
+        var blobDataContributorRole = data
+            .GetAuthorizationRoleDefinitions()
+            .GetAll()
+            .FirstOrDefault(r => r.Data.RoleName == blobRole)
+            ?.Data ?? throw new InvalidOperationException($"Cannot find {blobRole} role definition.");
+        if (data.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != blobDataContributorRole.Id))
+        {
+            data.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
+                roleDefinitionId: blobDataContributorRole.Id,
+                principalId: principalId));
+            console.WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description} role.");
+        }
+
+        var cosmosRole = "Cosmos DB Built-in Data Contributor";
+        var cosmosSqlReaderRole = meta
+            .GetCosmosDBSqlRoleDefinitions()
+            .GetAll()
+            .FirstOrDefault(r => r.Data.RoleName == cosmosRole)
+            ?.Data ?? throw new InvalidOperationException($"Cannot find {cosmosRole} role definition.");
+        if (meta.GetCosmosDBSqlRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != cosmosSqlReaderRole.Id))
+        {
+            meta.GetCosmosDBSqlRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new CosmosDBSqlRoleAssignmentCreateOrUpdateContent()
+            {
+                RoleDefinitionId = cosmosSqlReaderRole.Id,
+                PrincipalId = principalId,
+                Scope = meta.Id
+            });
+            console.WriteLine($"Authorized {principalId} to access Cosmos DB account {meta.Id.Name} as {cosmosRole}.");
+        }
     }
 
     static int DoBackendDeploy(
@@ -221,7 +277,7 @@ partial class Program
                     blobContainerName = AskBlobContainerName(null, storageAccount, console);
                 }
             }
-            var deploymentName = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            var deploymentName = $"exekias_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
             console.WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
             DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName, console);
             return 0;
