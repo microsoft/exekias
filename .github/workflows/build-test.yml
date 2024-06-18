@@ -109,6 +109,23 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
 
+      # The OIDC id token received in azure/login lasts for 5 min only (June 2024),
+      # after it expires, an attempt to receive an access token ends up in
+      # ERROR: AADSTS700024: Client assertion is not within its valid time range.
+      # Ther workaround is to preemptively get necessary access tokens, they will be stored in cache.
+      # See https://github.com/Azure/azure-cli/issues/28708#issuecomment-2047256166.
+      # The access tokens themselves have longer 60 min valid lifetime.
+      - name: Getting access tokens for Azure CLI
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az account get-access-token --scope https://storage.azure.com/.default --query expiresOn
+      - name: Getting access tokens for Azure PowerShell
+        uses: azure/powershell@v2
+        with:
+          inlineScript: |
+            Get-AzAccessToken -ResourceTypeName Storage | Select-Object ExpiresOn
+
       - name: Run canary test
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/powershell@v2
