@@ -10,7 +10,7 @@
 	<ItemGroup>
 		<PackageReference Include="Azure.Bicep.MSBuild" Version="0.27.1" />
 		<PackageReference Include="Azure.Bicep.CommandLine.win-x64" Version="0.27.1" />
-		<PackageReference Include="Azure.Identity" Version="1.11.3" />
+		<PackageReference Include="Azure.Identity" Version="1.11.4" />
 		<PackageReference Include="Azure.ResourceManager.AppService" Version="1.0.1" />
 		<PackageReference Include="Azure.ResourceManager.Authorization" Version="1.1.3" />
 		<PackageReference Include="Azure.ResourceManager.Batch" Version="1.4.0" />
