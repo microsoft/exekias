@@ -123,6 +123,7 @@ jobs:
       - name: Getting access tokens for Azure PowerShell
         uses: azure/powershell@v2
         with:
+          azPSVersion: "latest"
           inlineScript: |
             Get-AzAccessToken -ResourceTypeName Storage | Select-Object ExpiresOn
 
