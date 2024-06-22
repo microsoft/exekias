@@ -132,6 +132,18 @@ backendDeployCommand.AddOption(azureSubscriptionOption);
 backendDeployCommand.AddOption(resourceGroupOption);
 backendDeployCommand.AddOption(storageAccountOption);
 backendDeployCommand.AddOption(blobContainerOption);
+
+// backend allow <principal> -- allow a user or a group to access backend services.
+var backendAllowCommand = new Command("allow", "Allow a user or a group to access backend services.");
+backendCommand.AddCommand(backendAllowCommand);
+var backendAllowPrincipalArgument = new Argument<string>("principal", "User name or group name.");
+backendAllowCommand.AddArgument(backendAllowPrincipalArgument);
+backendAllowCommand.SetHandler(ctx => DoBackendAllow(
+    ctx.ParseResult.GetValueForOption(configOption),
+    ctx.ParseResult.GetValueForArgument(backendAllowPrincipalArgument),
+    ctx.Console));
+
+
 // location option
 var locationOption = new Option<string>("--location", "Azure location for the resource group.");
 backendDeployCommand.AddOption(locationOption);
@@ -140,7 +152,6 @@ var interactiveAuthOption = new Option<bool>("--interactiveauth", "Use interacti
 backendDeployCommand.AddOption(interactiveAuthOption);
 backendDeployCommand.SetHandler(ctx => DoBackendDeploy(
     ctx.ParseResult.GetValueForOption(configOption),
-    ctx.ParseResult.GetValueForOption(interactiveAuthOption),
     ctx.ParseResult.GetValueForOption(azureSubscriptionOption),
     ctx.ParseResult.GetValueForOption(resourceGroupOption),
     ctx.ParseResult.GetValueForOption(locationOption),

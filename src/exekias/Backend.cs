@@ -10,6 +10,7 @@ using Azure.ResourceManager.EventGrid;
 using Azure.ResourceManager.EventGrid.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.ResourceGraph;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
 using Azure.Storage.Blobs.Specialized;
@@ -17,6 +18,10 @@ using System.CommandLine;
 using System.CommandLine.IO;
 using System.Reflection;
 using System.Text.Json.Nodes;
+using Azure.ResourceManager.ResourceGraph.Models;
+using Newtonsoft.Json.Linq;
+using Microsoft.Extensions.Azure;
+using System;
 
 partial class Program
 {
@@ -237,7 +242,6 @@ partial class Program
 
     static int DoBackendDeploy(
         FileInfo? cfgFile,
-        bool interactiveAuth,
         string? subscription,
         string? resourceGroupName,
         string? location,
@@ -245,28 +249,57 @@ partial class Program
         string? blobContainerName,
         IConsole console)
     {
-        var cfg = LoadConfig(cfgFile, console, absentOk: true);
-        if (interactiveAuth)
-        {
-            credential = new Azure.Identity.InteractiveBrowserCredential();
-        }
         try
         {
-            var subscriptionResource = subscription == null && cfg is not null
-                ? arm.Value.GetSubscriptionResource(new ResourceIdentifier(cfg.subscriptionResourceId)).Get()
-                : AskSubscription(subscription, console);
+            var cfg = LoadConfig(cfgFile, console, absentOk: true);
+            var runStoreResource = new Lazy<StorageAccountResource>(() =>
+                arm.Value.GetStorageAccountResource(ResourceIdentifier.Parse(
+                    cfg?.runStoreResourceId ?? throw new InvalidOperationException("No Exekias config.")
+                )).Get()
+            );
+            var runStoreSubscription = new Lazy<SubscriptionResource>(() =>
+                arm.Value.GetSubscriptionResource(ResourceIdentifier.Parse(
+                    $"/subscriptions/{runStoreResource.Value.Id.SubscriptionId}"
+                )).Get()
+            );
+
+            bool needConfirmation = false;
+            SubscriptionResource subscriptionResource;
+            if (subscription is null && cfg is not null)
+            {
+                subscriptionResource = runStoreSubscription.Value;
+                console.WriteLine($"Using subscription {subscriptionResource.Data.DisplayName} from {cfgFile?.FullName}");
+                needConfirmation = true;
+            }
+            else
+            {
+                subscriptionResource = AskSubscription(subscription, console);
+            }
+
             if (!SubscriptionHasRequiredProviders(subscriptionResource, console)) { return 1; }
-            var resourceGroup = resourceGroupName == null && cfg is not null
-                ? subscriptionResource.GetResourceGroup(cfg.resourceGroup)
-                : AskResourceGroup(resourceGroupName, subscriptionResource, true, location, console);
-            var storageAccount = storageAccountName == null && cfg is not null
-                ? resourceGroup.GetStorageAccounts().Get(cfg.storageAccount)
-                : AskStorageAccount(storageAccountName, resourceGroup, true, console);
+
+            if (resourceGroupName is null && cfg is not null)
+            {
+                resourceGroupName = runStoreResource.Value.Data.Id.ResourceGroupName;
+                console.WriteLine($"Using resource group name {resourceGroupName} from {cfgFile?.FullName}");
+                needConfirmation = true;
+            }
+            var resourceGroup = AskResourceGroup(resourceGroupName, subscriptionResource, true, location, console);
+
+            if (storageAccountName is null && cfg is not null)
+            {
+                storageAccountName = runStoreResource.Value.Data.Name;
+                console.WriteLine($"Using storage account name {storageAccountName} from {cfgFile?.FullName}");
+                needConfirmation = true;
+            }
+            var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, true, console);
             if (blobContainerName == null)
             {
                 if (cfg is not null)
                 {
                     blobContainerName = cfg.runStoreContainerName;
+                    console.WriteLine($"Using blob container name {blobContainerName} from {cfgFile?.FullName}");
+                    needConfirmation = true;
                 }
                 else if (storageAccount.GetBlobService().GetBlobContainers().Count() == 0)
                 {
@@ -279,6 +312,10 @@ partial class Program
             }
             var deploymentName = $"exekias_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
             console.WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
+            if (needConfirmation && Choose("Proceed?", new string[] { "Yes", "No" }, false, console) != 1)
+            {
+                return 1;
+            }
             DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName, console);
             return 0;
         }
@@ -298,6 +335,37 @@ partial class Program
         try
         {
             UploadBatchApplicationPackage(path!, rid!, "dataimport", version!, console);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Error(console, $"Error {ex.GetType().Name}: {ex.Message}");
+            return 1;
+        }
+    }
+
+    static int DoBackendAllow(
+        FileInfo? cfgFile,
+        string? principalId,
+        IConsole console)
+    {
+        var tenant = arm.Value.GetTenants().First();
+        var query = "Resources | where type =~ 'Microsoft.DocumentDB/databaseAccounts' and properties.documentEndpoint == 'https://comoptlabstore.documents.azure.com:443/'";
+        //var query = "Resources | where type =~ 'Microsoft.Storage/storageAccounts' | where name == 'comoptlabstore'";
+        ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
+        System.Console.WriteLine(result.Count);
+        System.Console.WriteLine(result.TotalRecords);
+        System.Console.WriteLine(JsonNode.Parse(result.Data));
+        //foreach (var r in tenants.First().GetResources(new ResourceQueryContent("Resources | where type =~ 'Microsoft.Storage/storageAccounts'")).Value.Count)
+        //System.Console.WriteLine();
+        //.GetAll().First().GetResources("");
+        //     var cfg = LoadConfig(cfgFile, console);
+        try
+        {
+            //         var principal = Guid.Parse(principalId!);
+            //         var storageAccount = arm.Value.GetStorageAccountResource(new ResourceIdentifier(rid!));
+            //         var cosmosAccount = arm.Value.GetCosmosDBAccountResource(new ResourceIdentifier(rid!));
+            //         AuthorizeCredentials(storageAccount, cosmosAccount, principal, console);
             return 0;
         }
         catch (Exception ex)

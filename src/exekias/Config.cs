@@ -6,28 +6,49 @@ using Azure.ResourceManager.AppService;
 using Azure.ResourceManager.AppService.Models;
 using Azure.ResourceManager.EventGrid;
 using Azure.ResourceManager.EventGrid.Models;
+using Azure.ResourceManager.ResourceGraph;
+using Azure.ResourceManager.ResourceGraph.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
 using System.CommandLine;
 using System.CommandLine.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 record ExekiasConfig(
-    string subscriptionResourceId,
-    string resourceGroup,
     string runStoreUrl,
     string runStoreMetadataFilePattern,
     string exekiasStoreEndpoint,
     string exekiasStoreDatabaseName,
     string exekiasStoreContainerName)
 {
-    public string storageAccount
+    string resourceId(string query, string key){
+            var tenant = Program.arm.Value.GetTenants().First();
+            ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
+            var errorMessage = $"Cannot find ARM resource for {key}, you may not have access to an appropriate Azure subscription/resource group.";
+            if (result.TotalRecords != 1) throw new InvalidOperationException(errorMessage);
+            return JsonNode.Parse(result.Data)?[0]?["id"]?.GetValue<string>() ?? throw new InvalidOperationException(errorMessage);
+    }
+    public string runStoreResourceId
     {
         get
         {
-            var host = new Uri(runStoreUrl).Host;
-            return host.Substring(0, host.IndexOf('.'));
+            return resourceId(
+                $"Resources | where type =~ 'Microsoft.Storage/storageAccounts' and '{runStoreUrl}' startswith properties.primaryEndpoints.blob",
+                runStoreUrl
+            );
+        }
+    }
+
+    public string exekiasStoreResourceId
+    {
+        get
+        {
+            return resourceId(
+                $"Resources | where type =~ 'Microsoft.DocumentDB/databaseAccounts' and properties.documentEndpoint == 'https://comoptlabstore.documents.azure.com:443/'",
+                runStoreUrl
+            );
         }
     }
 
@@ -43,7 +64,7 @@ partial class Program
             ExcludeManagedIdentityCredential = true,
             ExcludeWorkloadIdentityCredential = true
         });
-    static Lazy<ArmClient> arm = new(() => new(credential));
+    public static Lazy<ArmClient> arm = new(() => new(credential));
 
     static void Error(IConsole console, string message)
     {
@@ -103,9 +124,12 @@ partial class Program
         var cfg = LoadConfig(cfgFile, console);
         if (cfg == null) { return 1; }
         console.WriteLine($"Configuration file {cfgFile?.FullName}");
-        SubscriptionResource subscription = arm.Value.GetSubscriptionResource(new ResourceIdentifier(cfg.subscriptionResourceId)).Get();
+        var runStoreResourceId = ResourceIdentifier.Parse(cfg.runStoreResourceId);
+        SubscriptionResource subscription = arm.Value.GetSubscriptionResource(ResourceIdentifier.Parse(
+                $"/subscriptions/{runStoreResourceId.SubscriptionId}"
+            )).Get();
         console.WriteLine($"Subscription: {subscription.Data.SubscriptionId} ({subscription.Data.DisplayName})");
-        ResourceGroupResource resourceGroup = subscription.GetResourceGroup(cfg.resourceGroup);
+        ResourceGroupResource resourceGroup = subscription.GetResourceGroup(runStoreResourceId.ResourceGroupName);
         console.WriteLine($"Resource group: {resourceGroup.Data.Name} ({resourceGroup.Data.Location})");
         console.WriteLine($"Blob container: {cfg.runStoreUrl}");
         console.WriteLine($"Blob metadata file pattern: {cfg.runStoreMetadataFilePattern}");
@@ -419,9 +443,7 @@ partial class Program
                 return 1;
             }
             var cfg = new ExekiasConfig(
-                subscriptionResource.Id.ToString(),
-                resourceGroup.Data.Name,
-                appSettings.Properties["RunStore__BlobContainerUrl"],
+                runStoreUrl: appSettings.Properties["RunStore__BlobContainerUrl"],
                 runStoreMetadataFilePattern: appSettings.Properties["RunStore__MetadataFilePattern"],
                 exekiasStoreEndpoint: appSettings.Properties["ExekiasCosmos__Endpoint"],
                 exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos__DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
