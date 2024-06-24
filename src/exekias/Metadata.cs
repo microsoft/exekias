@@ -1,33 +1,28 @@
 ﻿using Exekias.CosmosDb;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.CommandLine;
-using System.CommandLine.Invocation;
 using System.Text.Json;
 
-partial class Program
+partial class Worker
 {
 
-    static async Task<int> DoQuery(
-        FileInfo? cfgFile,
+    public async Task<int> DoQuery(
         string query,
         string orderBy,
         bool orderAscending,
         int top,
         bool jsonOutput,
-        bool isHidden,
-        IConsole console)
+        bool isHidden)
     {
-        var cfg = LoadConfig(cfgFile, console);
-        if (cfg == null)
+        if (Config == null)
         {
             return 1;
         }
         var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
         {
-            Endpoint = cfg.exekiasStoreEndpoint,
-            DatabaseName = cfg.exekiasStoreDatabaseName,
-            ContainerName = cfg.exekiasStoreContainerName
+            Endpoint = Config.exekiasStoreEndpoint,
+            DatabaseName = Config.exekiasStoreDatabaseName,
+            ContainerName = Config.exekiasStoreContainerName
         }), LoggerFactory.Create(builder =>
         {
             builder
@@ -51,21 +46,17 @@ partial class Program
         return 0;
     }
 
-    static async Task<int> DoShow(
-        FileInfo? cfgFile,
-        string runId,
-        IConsole console)
+    public async Task<int> DoShow(string runId)
     {
-        var cfg = LoadConfig(cfgFile, console);
-        if (cfg == null)
+        if (Config == null)
         {
             return 1;
         }
         var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
         {
-            Endpoint = cfg.exekiasStoreEndpoint,
-            DatabaseName = cfg.exekiasStoreDatabaseName,
-            ContainerName = cfg.exekiasStoreContainerName
+            Endpoint = Config.exekiasStoreEndpoint,
+            DatabaseName = Config.exekiasStoreDatabaseName,
+            ContainerName = Config.exekiasStoreContainerName
         }), LoggerFactory.Create(builder =>
         {
             builder
@@ -75,7 +66,7 @@ partial class Program
         var result = await exekiasStore.GetMetaObject(runId);
         if (null == result)
         {
-            Error(console, $"Run '{runId}' cannot be found.");
+            WriteError($"Run '{runId}' cannot be found.");
         }
         else
         {
@@ -84,22 +75,17 @@ partial class Program
         return 0;
     }
 
-    static async Task<int> DoHide(
-        FileInfo? cfgFile,
-        string runId,
-        bool unhide,
-        IConsole console)
+    public async Task<int> DoHide(string runId, bool unhide)
     {
-        var cfg = LoadConfig(cfgFile, console);
-        if (cfg == null)
+        if (Config == null)
         {
             return 1;
         }
         var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
         {
-            Endpoint = cfg.exekiasStoreEndpoint,
-            DatabaseName = cfg.exekiasStoreDatabaseName,
-            ContainerName = cfg.exekiasStoreContainerName
+            Endpoint = Config.exekiasStoreEndpoint,
+            DatabaseName = Config.exekiasStoreDatabaseName,
+            ContainerName = Config.exekiasStoreContainerName
         }), LoggerFactory.Create(builder =>
         {
             builder
@@ -108,7 +94,7 @@ partial class Program
         }).CreateLogger<ExekiasStore>());
         if (!await exekiasStore.SetHidden(runId, !unhide))
         {
-            Error(console, $"Run '{runId}' cannot be found.");
+            WriteError($"Run '{runId}' cannot be found.");
         }
         return 0;
     }

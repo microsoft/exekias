@@ -14,18 +14,13 @@ using Azure.ResourceManager.ResourceGraph;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
 using Azure.Storage.Blobs.Specialized;
-using System.CommandLine;
-using System.CommandLine.IO;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using Azure.ResourceManager.ResourceGraph.Models;
-using Newtonsoft.Json.Linq;
-using Microsoft.Extensions.Azure;
-using System;
 
-partial class Program
+partial class Worker
 {
-    static bool SubscriptionHasRequiredProviders(SubscriptionResource subscription, IConsole console)
+    public bool SubscriptionHasRequiredProviders(SubscriptionResource subscription)
     {
         var providers = subscription.GetResourceProviders(); //.GetAll();
         var requiredProviders = new[] { "Microsoft.Batch", "Microsoft.EventGrid", "Microsoft.Storage", "Microsoft.Web", "Microsoft.DocumentDB", "Microsoft.Insights", "Microsoft.OperationalInsights" };
@@ -44,11 +39,8 @@ partial class Program
                 {
                     if (ex.Status == 403)
                     {
-                        lock (console)
-                        {
-                            Error(console, $"The provider {p} is not reqistered for subscription {subscription.Id.Name} and you do not have permissions to register it." +
-                                " See https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-providers-and-types#register-resource-provider for details.");
-                        }
+                        WriteError($"The provider {p} is not reqistered for subscription {subscription.Id.Name} and you do not have permissions to register it." +
+                            " See https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-providers-and-types#register-resource-provider for details.");
                         return false;
                     }
                     throw;
@@ -58,12 +50,9 @@ partial class Program
             {
                 if (ex.Status == 404)
                 {
-                    lock (console)
-                    {
-                        Error(console, $"The provider {p} is not known for subscription {subscription.Id.Name}." +
-                           " See https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-providers-and-types#register-resource-provider for details.");
-                        return false;
-                    }
+                    WriteError($"The provider {p} is not known for subscription {subscription.Id.Name}." +
+                       " See https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-providers-and-types#register-resource-provider for details.");
+                    return false;
                 }
                 throw;
             }
@@ -73,7 +62,7 @@ partial class Program
         return result;
     }
 
-    static void DeployComponents(ResourceGroupResource resourceGroup, StorageAccountResource runStore, string containerName, string deploymentName, IConsole console)
+    public void DeployComponents(ResourceGroupResource resourceGroup, StorageAccountResource runStore, string containerName, string deploymentName)
     {
         //
         // Assumes the directory contains packages 'sync.zip', 'fetch.zip' and 'tables.zip'.
@@ -109,12 +98,12 @@ partial class Program
                         {"storeContainer", new JsonObject(){ {"value", containerName } } }
                     })
                 })).Value;
-        console.WriteLine("Deployment completed. The following resource have been created or updated:");
+        WriteLine("Deployment completed. The following resource have been created or updated:");
         foreach (var subResource in deployment.Data.Properties.OutputResources)
         {
             if (subResource is not null)
             {
-                console.WriteLine($"  {subResource.Id}");
+                WriteLine($"  {subResource.Id}");
             }
         }
         var deploymentOutput = deployment.Data.Properties.Outputs.ToObjectFromJson<JsonObject>();
@@ -126,15 +115,15 @@ partial class Program
 
         // deploy syncFunction code from sync.zip
         var runChangeEventSink = "RunChangeEventSink";
-        WebSiteResource syncFunction = arm.Value.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
+        WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
         // the deployment created a new function app. Deploy code from a package.
         syncFunction = DeployFunctionCode(syncFunction, syncPackagePath, runChangeEventSink);
-        console.WriteLine($"Deployed package {Path.GetFileName(syncPackagePath)} to Function app {syncFunction.Id.Name}");
+        WriteLine($"Deployed package {Path.GetFileName(syncPackagePath)} to Function app {syncFunction.Id.Name}");
 
         // subscribe sync function app to the storage eventgrid events
-        console.WriteLine("Subscribing backend to storage events.");
+        WriteLine("Subscribing backend to storage events.");
         SiteFunctionResource update = syncFunction.GetSiteFunctions().Get(runChangeEventSink);
-        var topic = arm.Value.GetSystemTopicResource(new ResourceIdentifier(topicId!));
+        var topic = Arm.GetSystemTopicResource(new ResourceIdentifier(topicId!));
         var subscriptions = topic.GetSystemTopicEventSubscriptions();
         subscriptions.CreateOrUpdate(Azure.WaitUntil.Completed, syncFunction.Data.Name, new EventGridSubscriptionData()
         {
@@ -144,23 +133,23 @@ partial class Program
             }
         });
 
-        console.WriteLine("Adding application package to batch account.");
+        WriteLine("Adding application package to batch account.");
         PoolAssignApplication(batchPoolId!,
-            UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0", console));
+            UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0"));
 
-        var token = credential.GetToken(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
+        var token = Credential.GetToken(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
         string base64Payload = token.Token.Split('.')[1];
         var paddingLength = (4 - base64Payload.Length % 4) % 4;
         var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
         var principalId = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement.GetProperty("oid").GetGuid();
-        CosmosDBAccountResource metaStore = arm.Value.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
-        AuthorizeCredentials(runStore, metaStore, principalId, console);
+        CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
+        AuthorizeCredentials(runStore, metaStore, principalId);
     }
 
-    static WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath, string expected)
+    WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath, string expected)
     {
         var packageUrl = funcApp.GetApplicationSettings().Value.Properties["WEBSITE_RUN_FROM_PACKAGE"] ?? throw new NullReferenceException("WEBSITE_RUN_FROM_PACKAGE property not set.");
-        var blob = new Azure.Storage.Blobs.BlobClient(new Uri(packageUrl), credential);
+        var blob = new Azure.Storage.Blobs.BlobClient(new Uri(packageUrl), Credential);
         blob.Upload(zipPath, overwrite: true);
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -174,9 +163,9 @@ partial class Program
         return funcApp.Get();
     }
 
-    static BatchApplicationPackageReference UploadBatchApplicationPackage(string packagePath, string batchAccountId, string appName, string version, IConsole console)
+    BatchApplicationPackageReference UploadBatchApplicationPackage(string packagePath, string batchAccountId, string appName, string version)
     {
-        var batchAccount = arm.Value.GetBatchAccountResource(new ResourceIdentifier(batchAccountId!));
+        var batchAccount = Arm.GetBatchAccountResource(new ResourceIdentifier(batchAccountId!));
         BatchApplicationResource batchAccountApplication = batchAccount
             .GetBatchApplications()
             .CreateOrUpdate(Azure.WaitUntil.Completed, appName, new BatchApplicationData())
@@ -188,25 +177,24 @@ partial class Program
         var blobClient = new BlockBlobClient(appPackage.Data.StorageUri);
         using var packageStream = File.OpenRead(packagePath);
         blobClient.Upload(packageStream);
-        console.WriteLine($"Uploaded app package {Path.GetFileName(packagePath)} to Batch Service {batchAccount.Id.Name} as {appName} v.{version}");
+        WriteLine($"Uploaded app package {Path.GetFileName(packagePath)} to Batch Service {batchAccount.Id.Name} as {appName} v.{version}");
         appPackage.Activate(new BatchApplicationPackageActivateContent("zip"));
         return new BatchApplicationPackageReference(batchAccountApplication.Id) { Version = version };
     }
 
-    static void PoolAssignApplication(string batchPoolId, BatchApplicationPackageReference appReference)
+    void PoolAssignApplication(string batchPoolId, BatchApplicationPackageReference appReference)
     {
-        var batchPool = arm.Value.GetBatchAccountPoolResource(new ResourceIdentifier(batchPoolId!));
+        var batchPool = Arm.GetBatchAccountPoolResource(new ResourceIdentifier(batchPoolId!));
         batchPool.Update(new BatchAccountPoolData()
         {
             ApplicationPackages = { appReference }
         });
     }
 
-    static void AuthorizeCredentials(
+    void AuthorizeCredentials(
         StorageAccountResource data,
         CosmosDBAccountResource meta,
-        Guid principalId,
-        IConsole console)
+        Guid principalId)
     {
         var blobRole = "Storage Blob Data Contributor";
         var blobDataContributorRole = data
@@ -219,7 +207,7 @@ partial class Program
             data.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
                 roleDefinitionId: blobDataContributorRole.Id,
                 principalId: principalId));
-            console.WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description} role.");
+            WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description} role.");
         }
 
         var cosmosRole = "Cosmos DB Built-in Data Contributor";
@@ -236,69 +224,63 @@ partial class Program
                 PrincipalId = principalId,
                 Scope = meta.Id
             });
-            console.WriteLine($"Authorized {principalId} to access Cosmos DB account {meta.Id.Name} as {cosmosRole}.");
+            WriteLine($"Authorized {principalId} to access Cosmos DB account {meta.Id.Name} as {cosmosRole}.");
         }
     }
 
-    static int DoBackendDeploy(
-        FileInfo? cfgFile,
+    public int DoBackendDeploy(
         string? subscription,
         string? resourceGroupName,
         string? location,
         string? storageAccountName,
-        string? blobContainerName,
-        IConsole console)
+        string? blobContainerName)
     {
         try
         {
-            var cfg = LoadConfig(cfgFile, console, absentOk: true);
             var runStoreResource = new Lazy<StorageAccountResource>(() =>
-                arm.Value.GetStorageAccountResource(ResourceIdentifier.Parse(
-                    cfg?.runStoreResourceId ?? throw new InvalidOperationException("No Exekias config.")
-                )).Get()
+                Arm.GetStorageAccountResource(ResourceIdentifier.Parse(runStoreResourceId)).Get()
             );
             var runStoreSubscription = new Lazy<SubscriptionResource>(() =>
-                arm.Value.GetSubscriptionResource(ResourceIdentifier.Parse(
+                Arm.GetSubscriptionResource(ResourceIdentifier.Parse(
                     $"/subscriptions/{runStoreResource.Value.Id.SubscriptionId}"
                 )).Get()
             );
 
             bool needConfirmation = false;
             SubscriptionResource subscriptionResource;
-            if (subscription is null && cfg is not null)
+            if (subscription is null && Config is not null)
             {
                 subscriptionResource = runStoreSubscription.Value;
-                console.WriteLine($"Using subscription {subscriptionResource.Data.DisplayName} from {cfgFile?.FullName}");
+                WriteLine($"Using subscription {subscriptionResource.Data.DisplayName} from {ConfigFile?.FullName}");
                 needConfirmation = true;
             }
             else
             {
-                subscriptionResource = AskSubscription(subscription, console);
+                subscriptionResource = AskSubscription(subscription);
             }
 
-            if (!SubscriptionHasRequiredProviders(subscriptionResource, console)) { return 1; }
+            if (!SubscriptionHasRequiredProviders(subscriptionResource)) { return 1; }
 
-            if (resourceGroupName is null && cfg is not null)
+            if (resourceGroupName is null && Config is not null)
             {
                 resourceGroupName = runStoreResource.Value.Data.Id.ResourceGroupName;
-                console.WriteLine($"Using resource group name {resourceGroupName} from {cfgFile?.FullName}");
+                WriteLine($"Using resource group name {resourceGroupName} from {ConfigFile?.FullName}");
                 needConfirmation = true;
             }
-            var resourceGroup = AskResourceGroup(resourceGroupName, subscriptionResource, true, location, console);
+            var resourceGroup = AskResourceGroup(resourceGroupName, subscriptionResource, true, location);
 
-            if (storageAccountName is null && cfg is not null)
+            if (storageAccountName is null && Config is not null)
             {
                 storageAccountName = runStoreResource.Value.Data.Name;
-                console.WriteLine($"Using storage account name {storageAccountName} from {cfgFile?.FullName}");
+                WriteLine($"Using storage account name {storageAccountName} from {ConfigFile?.FullName}");
                 needConfirmation = true;
             }
-            var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, true, console);
+            var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, true);
             if (blobContainerName == null)
             {
-                if (cfg is not null)
+                if (Config is not null)
                 {
-                    blobContainerName = cfg.runStoreContainerName;
-                    console.WriteLine($"Using blob container name {blobContainerName} from {cfgFile?.FullName}");
+                    WriteLine($"Using blob container name {runStoreContainerName} from {ConfigFile?.FullName}");
                     needConfirmation = true;
                 }
                 else if (storageAccount.GetBlobService().GetBlobContainers().Count() == 0)
@@ -307,70 +289,64 @@ partial class Program
                 }
                 else
                 {
-                    blobContainerName = AskBlobContainerName(null, storageAccount, console);
+                    blobContainerName = AskBlobContainerName(null, storageAccount);
                 }
             }
             var deploymentName = $"exekias_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
-            console.WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
-            if (needConfirmation && Choose("Proceed?", new string[] { "Yes", "No" }, false, console) != 1)
+            WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
+            if (needConfirmation && Choose("Proceed?", new string[] { "Yes", "No" }, false) != 1)
             {
                 return 1;
             }
-            DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName, console);
+            DeployComponents(resourceGroup, storageAccount, runStoreContainerName, deploymentName);
             return 0;
         }
         catch (InvalidOperationException ex)
         {
-            Error(console, ex.Message);
+            WriteError(ex.Message);
             return 1;
         }
     }
-    static int DoBackendBatchAppUpload(
-        //FileInfo? cfgFile,
+    public int DoBackendBatchAppUpload(
         string? rid,  // temporary
         string? path,
-        string? version,
-        IConsole console)
+        string? version)
     {
         try
         {
-            UploadBatchApplicationPackage(path!, rid!, "dataimport", version!, console);
+            UploadBatchApplicationPackage(path!, rid!, "dataimport", version!);
             return 0;
         }
         catch (Exception ex)
         {
-            Error(console, $"Error {ex.GetType().Name}: {ex.Message}");
+            WriteError($"Error {ex.GetType().Name}: {ex.Message}");
             return 1;
         }
     }
 
-    static int DoBackendAllow(
-        FileInfo? cfgFile,
-        string? principalId,
-        IConsole console)
+    public int DoBackendAllow(string? principalId)
     {
-        var tenant = arm.Value.GetTenants().First();
+        var tenant = Arm.GetTenants().First();
         var query = "Resources | where type =~ 'Microsoft.DocumentDB/databaseAccounts' and properties.documentEndpoint == 'https://comoptlabstore.documents.azure.com:443/'";
         //var query = "Resources | where type =~ 'Microsoft.Storage/storageAccounts' | where name == 'comoptlabstore'";
         ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
-        System.Console.WriteLine(result.Count);
-        System.Console.WriteLine(result.TotalRecords);
-        System.Console.WriteLine(JsonNode.Parse(result.Data));
+        WriteLine($"{result.Count} {result.TotalRecords}");
+        WriteLine(JsonNode.Parse(result.Data)?.ToString() ?? "");
         //foreach (var r in tenants.First().GetResources(new ResourceQueryContent("Resources | where type =~ 'Microsoft.Storage/storageAccounts'")).Value.Count)
-        //System.Console.WriteLine();
+        //System.WriteLine();
         //.GetAll().First().GetResources("");
-        //     var cfg = LoadConfig(cfgFile, console);
+        //     var Config = LoadConfig(ConfigFile, console);
         try
         {
             //         var principal = Guid.Parse(principalId!);
-            //         var storageAccount = arm.Value.GetStorageAccountResource(new ResourceIdentifier(rid!));
-            //         var cosmosAccount = arm.Value.GetCosmosDBAccountResource(new ResourceIdentifier(rid!));
+            //         var storageAccount = Arm.GetStorageAccountResource(new ResourceIdentifier(rid!));
+            //         var cosmosAccount = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(rid!));
             //         AuthorizeCredentials(storageAccount, cosmosAccount, principal, console);
             return 0;
         }
         catch (Exception ex)
         {
-            Error(console, $"Error {ex.GetType().Name}: {ex.Message}");
+            WriteError($"Error {ex.GetType().Name}: {ex.Message}");
             return 1;
         }
     }

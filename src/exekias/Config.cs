@@ -1,144 +1,38 @@
 ﻿using Azure;
 using Azure.Core;
-using Azure.Identity;
-using Azure.ResourceManager;
 using Azure.ResourceManager.AppService;
 using Azure.ResourceManager.AppService.Models;
 using Azure.ResourceManager.EventGrid;
 using Azure.ResourceManager.EventGrid.Models;
-using Azure.ResourceManager.ResourceGraph;
-using Azure.ResourceManager.ResourceGraph.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
-using System.CommandLine;
-using System.CommandLine.IO;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
-record ExekiasConfig(
-    string runStoreUrl,
-    string runStoreMetadataFilePattern,
-    string exekiasStoreEndpoint,
-    string exekiasStoreDatabaseName,
-    string exekiasStoreContainerName)
+
+partial class Worker
 {
-    string resourceId(string query, string key){
-            var tenant = Program.arm.Value.GetTenants().First();
-            ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
-            var errorMessage = $"Cannot find ARM resource for {key}, you may not have access to an appropriate Azure subscription/resource group.";
-            if (result.TotalRecords != 1) throw new InvalidOperationException(errorMessage);
-            return JsonNode.Parse(result.Data)?[0]?["id"]?.GetValue<string>() ?? throw new InvalidOperationException(errorMessage);
-    }
-    public string runStoreResourceId
+
+
+    public int DoShow()
     {
-        get
-        {
-            return resourceId(
-                $"Resources | where type =~ 'Microsoft.Storage/storageAccounts' and '{runStoreUrl}' startswith properties.primaryEndpoints.blob",
-                runStoreUrl
-            );
-        }
-    }
-
-    public string exekiasStoreResourceId
-    {
-        get
-        {
-            return resourceId(
-                $"Resources | where type =~ 'Microsoft.DocumentDB/databaseAccounts' and properties.documentEndpoint == 'https://comoptlabstore.documents.azure.com:443/'",
-                runStoreUrl
-            );
-        }
-    }
-
-    public string runStoreContainerName => new Uri(runStoreUrl).LocalPath;
-}
-
-partial class Program
-{
-    static TokenCredential credential = new DefaultAzureCredential(
-        new DefaultAzureCredentialOptions()
-        {
-            ExcludeInteractiveBrowserCredential = false,
-            ExcludeManagedIdentityCredential = true,
-            ExcludeWorkloadIdentityCredential = true
-        });
-    public static Lazy<ArmClient> arm = new(() => new(credential));
-
-    static void Error(IConsole console, string message)
-    {
-        var savedColor = Console.ForegroundColor;
-        if (!console.IsErrorRedirected) System.Console.ForegroundColor = ConsoleColor.Red;
-        console.Error.WriteLine(message);
-        if (!console.IsErrorRedirected) System.Console.ForegroundColor = savedColor;
-    }
-
-    static int Choose(string title, string[] items, bool createNew, IConsole console)
-    {
-        if (console.IsInputRedirected)
-        {
-            throw new InvalidOperationException("Interactive mode not available as standard input is redirected.");
-        }
-        int lower = createNew ? 0 : 1;
-        int input = -1;
-        string? line = null;
-        console.WriteLine("");
-        console.WriteLine(title);
-        if (createNew)
-            console.WriteLine("0 - (create new)");
-        for (int i = 0; i < items.Length; i++) { console.WriteLine($"{i + 1} - {items[i]}"); }
-        while (input < 0)
-        {
-            console.Write($"Choose a number between {lower} and {items.Length}: ");
-            line = System.Console.ReadLine();
-            if (line == null) { throw new System.IO.EndOfStreamException(); }
-            if (int.TryParse(line, out int parsed) && parsed >= lower && parsed <= items.Length) { input = parsed; }
-        }
-        return input - 1;
-    }
-
-    static ExekiasConfig? LoadConfig(FileInfo? cfgFile, IConsole console, bool absentOk = false)
-    {
-        if (cfgFile == null) throw new ArgumentNullException(nameof(cfgFile));
-        if (!cfgFile.Exists)
-        {
-            if (!absentOk)
-            {
-                Error(console, $"File {cfgFile.FullName} dosn't exist. To create a new configuration file use 'config create' command.");
-            }
-            return null;
-        }
-        using var file = cfgFile.OpenRead();
-        var cfg = JsonSerializer.Deserialize<ExekiasConfig>(file);
-        if (cfg == null)
-        {
-            Error(console, $"File {cfgFile.FullName} has invalid format.");
-            return null;
-        }
-        return cfg;
-    }
-
-    static int DoShow(FileInfo? cfgFile, IConsole console)
-    {
-        var cfg = LoadConfig(cfgFile, console);
-        if (cfg == null) { return 1; }
-        console.WriteLine($"Configuration file {cfgFile?.FullName}");
-        var runStoreResourceId = ResourceIdentifier.Parse(cfg.runStoreResourceId);
-        SubscriptionResource subscription = arm.Value.GetSubscriptionResource(ResourceIdentifier.Parse(
+        if (Config == null) { return 1; }
+        WriteLine($"Configuration file {ConfigFile.FullName}");
+        var runStoreResourceId = ResourceIdentifier.Parse(this.runStoreResourceId);
+        SubscriptionResource subscription = Arm.GetSubscriptionResource(ResourceIdentifier.Parse(
                 $"/subscriptions/{runStoreResourceId.SubscriptionId}"
             )).Get();
-        console.WriteLine($"Subscription: {subscription.Data.SubscriptionId} ({subscription.Data.DisplayName})");
+        WriteLine($"Subscription: {subscription.Data.SubscriptionId} ({subscription.Data.DisplayName})");
         ResourceGroupResource resourceGroup = subscription.GetResourceGroup(runStoreResourceId.ResourceGroupName);
-        console.WriteLine($"Resource group: {resourceGroup.Data.Name} ({resourceGroup.Data.Location})");
-        console.WriteLine($"Blob container: {cfg.runStoreUrl}");
-        console.WriteLine($"Blob metadata file pattern: {cfg.runStoreMetadataFilePattern}");
+        WriteLine($"Resource group: {resourceGroup.Data.Name} ({resourceGroup.Data.Location})");
+        WriteLine($"Blob container: {Config.runStoreUrl}");
+        WriteLine($"Blob metadata file pattern: {Config.runStoreMetadataFilePattern}");
         return 0;
     }
 
-    static SubscriptionResource AskSubscription(string? subscription, IConsole console)
+    SubscriptionResource AskSubscription(string? subscription)
     {
-        var subscriptionCollection = arm.Value.GetSubscriptions();
+        var subscriptionCollection = Arm.GetSubscriptions();
         // try get subscription by id
         if (subscription != null)
         {
@@ -169,18 +63,18 @@ partial class Program
         if (all.Length == 1)
         {
 
-            console.WriteLine($"Using subscription {all[0].Data.DisplayName} ({all[0].Data.SubscriptionId})");
+            WriteLine($"Using subscription {all[0].Data.DisplayName} ({all[0].Data.SubscriptionId})");
             return all[0];
         }
-        if (console.IsInputRedirected)
+        if (IsInputRedirected)
         {
             throw new InvalidOperationException("Specify Azure subscription using --subscription option.");
         }
-        var chosen = Choose("Subscriptions:", Array.ConvertAll(all, s => s.Data.DisplayName), false, console);
+        var chosen = Choose("Subscriptions:", Array.ConvertAll(all, s => s.Data.DisplayName), false);
         return all[chosen];
     }
 
-    static ResourceGroupResource AskResourceGroup(string? resourceGroupName, SubscriptionResource subscription, bool createIfNotExists, string? location, IConsole console)
+    ResourceGroupResource AskResourceGroup(string? resourceGroupName, SubscriptionResource subscription, bool createIfNotExists, string? location)
     {
         ResourceGroupCollection resourceGroups = subscription.GetResourceGroups();
         if (resourceGroupName != null)
@@ -205,13 +99,13 @@ partial class Program
         ResourceGroupResource[] all = resourceGroups.GetAll().ToArray();
         if (all.Length == 1)
         {
-            console.WriteLine($"Using resource group {all[0].Data.Name}");
+            WriteLine($"Using resource group {all[0].Data.Name}");
         }
-        if (console.IsInputRedirected)
+        if (IsInputRedirected)
         {
             throw new InvalidOperationException("Specify Azure resource group name using --resourcegroup option.");
         }
-        var chosen = Choose("Resource groups:", Array.ConvertAll(all, s => s.Data.Name), createIfNotExists, console);
+        var chosen = Choose("Resource groups:", Array.ConvertAll(all, s => s.Data.Name), createIfNotExists);
         if (chosen < 0)
         {
             // find out available locations for a new group in the subscription
@@ -220,17 +114,17 @@ partial class Program
             {
                 throw new InvalidOperationException("No locations available for the subscription");
             }
-            chosen = Choose("Locations:", Array.ConvertAll(locations, l => l.RegionalDisplayName), false, console);
+            chosen = Choose("Locations:", Array.ConvertAll(locations, l => l.RegionalDisplayName), false);
             string? name = null;
             while (name == null)
             {
                 // ask for a new resource group name
-                console.Write("Resource group name: ");
+                System.Console.Write("Resource group name: ");
                 name = System.Console.ReadLine();
                 if (name == null) { throw new EndOfStreamException(); }
                 if (string.IsNullOrWhiteSpace(name) || name[name.Length - 1] == '.' || !System.Text.RegularExpressions.Regex.IsMatch(name, @"^[-\w\._\(\)]+$"))
                 {
-                    console.WriteLine("Resource group name can include alphanumeric, underscore, parentheses, hyphen, period (except at end).");
+                    WriteLine("Resource group name can include alphanumeric, underscore, parentheses, hyphen, period (except at end).");
                     name = null;
                 }
             }
@@ -239,9 +133,9 @@ partial class Program
         return all[chosen];
     }
 
-    static StorageAccountResource CreateNewStorageAccount(string name, ResourceGroupResource resourceGroup, IConsole console)
+    StorageAccountResource CreateNewStorageAccount(string name, ResourceGroupResource resourceGroup)
     {
-        console.WriteLine($"Creating storage account {name} in {resourceGroup.Id.Name}.");
+        WriteLine($"Creating storage account {name} in {resourceGroup.Id.Name}.");
         var account = resourceGroup.GetStorageAccounts().CreateOrUpdate(Azure.WaitUntil.Completed,
             name,
             new StorageAccountCreateOrUpdateContent(
@@ -267,7 +161,7 @@ partial class Program
             {
                 if (e.Status == 404)
                 {
-                    console.WriteLine("Blob service not available yet, retry in 10 s.");
+                    WriteLine("Blob service not available yet, retry in 10 s.");
                     Thread.Sleep(10_000);
                 }
                 else { throw; }
@@ -277,7 +171,7 @@ partial class Program
         return account;
     }
 
-    static StorageAccountResource AskStorageAccount(string? storageAccountName, ResourceGroupResource resourceGroup, bool createIfNotExists, IConsole console)
+    StorageAccountResource AskStorageAccount(string? storageAccountName, ResourceGroupResource resourceGroup, bool createIfNotExists)
     {
         StorageAccountCollection storageAccounts = resourceGroup.GetStorageAccounts();
         if (storageAccountName != null)
@@ -290,20 +184,20 @@ partial class Program
             {
                 if (createIfNotExists)
                 {
-                    return CreateNewStorageAccount(storageAccountName, resourceGroup, console);
+                    return CreateNewStorageAccount(storageAccountName, resourceGroup);
                 }
                 throw new InvalidOperationException($"{storageAccountName} does not exist in resource group {resourceGroup.Data.Name}");
             }
         }
-        if (console.IsInputRedirected)
+        if (IsInputRedirected)
         {
             throw new InvalidOperationException("Specify Azure resource group name using --storageaccount option.");
         }
         StorageAccountResource[] all = storageAccounts.GetAll().ToArray();
-        var chosen = Choose("Storage accounts:", Array.ConvertAll(all, a => a.Data.Name), createIfNotExists, console);
+        var chosen = Choose("Storage accounts:", Array.ConvertAll(all, a => a.Data.Name), createIfNotExists);
         if (chosen < 0)
         {
-            console.WriteLine("Creating a new storage account and associated backend resources.");
+            WriteLine("Creating a new storage account and associated backend resources.");
             // ask for a new storage account name
             StorageAccountResource? result = null;
             while (result == null)
@@ -311,22 +205,22 @@ partial class Program
                 string? name = null;
                 while (name == null)
                 {
-                    console.Write("Storage account name: ");
+                    System.Console.Write("Storage account name: ");
                     name = System.Console.ReadLine();
                     if (name == null) { throw new EndOfStreamException(); }
                     if (!System.Text.RegularExpressions.Regex.IsMatch(name, @"^[a-z0-9]{3,24}$"))
                     {
-                        console.WriteLine("Storage account name can include 3 to 24 lower case letters and numbers.");
+                        WriteLine("Storage account name can include 3 to 24 lower case letters and numbers.");
                         name = null;
                     }
                 }
                 try
                 {
-                    result = CreateNewStorageAccount(name, resourceGroup, console);
+                    result = CreateNewStorageAccount(name, resourceGroup);
                 }
                 catch (Azure.RequestFailedException ex) when (ex.Status == 409 && ex.ErrorCode == "StorageAccountAlreadyTaken")
                 {
-                    console.WriteLine("The storage account name is already taken.");
+                    WriteLine("The storage account name is already taken.");
                 }
             }
             return result;
@@ -334,7 +228,7 @@ partial class Program
         return all[chosen];
     }
 
-    static string AskBlobContainerName(string? blobContainerName, StorageAccountResource storageAccount, IConsole console)
+    string AskBlobContainerName(string? blobContainerName, StorageAccountResource storageAccount)
     {
         var all = storageAccount.GetBlobService().GetBlobContainers();
         if (blobContainerName != null)
@@ -348,25 +242,25 @@ partial class Program
                 throw new InvalidOperationException($"{blobContainerName} does not exist in storage account {storageAccount.Data.Name}");
             }
         }
-        if (console.IsInputRedirected)
+        if (IsInputRedirected)
         {
             throw new InvalidOperationException("Specify Azure resource group name using --blobcontainer option.");
         }
-        var chosen = Choose("Blob containers:", Array.ConvertAll(all.GetAll().ToArray(), a => a.Data.Name), true, console);
+        var chosen = Choose("Blob containers:", Array.ConvertAll(all.GetAll().ToArray(), a => a.Data.Name), true);
         if (chosen < 0)
         {
             // ask for a new blob container name
             string? name = null;
             while (name == null)
             {
-                console.Write("Blob container name: ");
+                System.Console.Write("Blob container name: ");
                 name = System.Console.ReadLine();
                 if (name == null) { throw new EndOfStreamException(); }
                 if (!System.Text.RegularExpressions.Regex.IsMatch(name, @"^[a-z0-9](?!.*--)[a-z0-9-]{1,61}[a-z0-9]$"))
                 {
-                    console.WriteLine("Blob container name can include 3 to 63 lower case letters, numbers and hyphens.");
-                    console.WriteLine("The name must start and end with a letter or number.");
-                    console.WriteLine("Two or more consecutive dash characters aren't permitted.");
+                    WriteLine("Blob container name can include 3 to 63 lower case letters, numbers and hyphens.");
+                    WriteLine("The name must start and end with a letter or number.");
+                    WriteLine("Two or more consecutive dash characters aren't permitted.");
                     name = null;
                 }
             }
@@ -375,7 +269,7 @@ partial class Program
         return all.GetAll().ToArray()[chosen].Data.Name;
     }
 
-    static AppServiceConfigurationDictionary? FindWebSiteSettings(StorageAccountResource storageAccount, string? blobContainerName, ResourceGroupResource resourceGroup, IConsole console)
+    AppServiceConfigurationDictionary? FindWebSiteSettings(StorageAccountResource storageAccount, string? blobContainerName, ResourceGroupResource resourceGroup)
     {
         List<ResourceIdentifier?> links = resourceGroup.GetSystemTopics()
             .AsEnumerable()
@@ -397,7 +291,7 @@ partial class Program
                     }
                     else
                     {
-                        var configured = arm.Value
+                        var configured = Arm
                             .GetWebSiteResource(id)
                             .GetApplicationSettings().Value
                             .Properties.TryGetValue("RunStore:BlobContainerName", out string? cnValue);
@@ -407,37 +301,34 @@ partial class Program
             .ToList();
         if (links.Count < 1)
         {
-            Error(console, $"No Exekias subscribers found for the Azure Storage Account {storageAccount.Id}.");
+            WriteError($"No Exekias subscribers found for the Azure Storage Account {storageAccount.Id}.");
             return null;
         }
         if (links.Count > 1)
         {
-            Error(console, $"More than one Exekias subscribers found for the Azure Storage Account {storageAccount.Id}.");
+            WriteError($"More than one Exekias subscribers found for the Azure Storage Account {storageAccount.Id}.");
             return null;
         }
-        return arm.Value.GetWebSiteResource(links[0]).GetApplicationSettings();
+        return Arm.GetWebSiteResource(links[0]).GetApplicationSettings();
     }
 
-    static int DoConfigCreate(
-        FileInfo? cfgFile,
+    public int DoConfigCreate(
         string? subscription,
         string? resourceGroupName,
         string? storageAccountName,
-        string? blobContainerName,
-        IConsole console)
+        string? blobContainerName)
     {
-        if (cfgFile == null) throw new ArgumentNullException(nameof(cfgFile));
-        if (cfgFile.Exists)
+        if (ConfigFile.Exists)
         {
-            Error(console, $"File {cfgFile.FullName} already exists.");
+            WriteError($"File {ConfigFile.FullName} already exists.");
             return 1;
         }
         try
         {
-            var subscriptionResource = AskSubscription(subscription, console);
-            var resourceGroup = AskResourceGroup(resourceGroupName, subscriptionResource, false, null, console);
-            var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, false, console);
-            var appSettings = FindWebSiteSettings(storageAccount, blobContainerName, resourceGroup, console);
+            var subscriptionResource = AskSubscription(subscription);
+            var resourceGroup = AskResourceGroup(resourceGroupName, subscriptionResource, false, null);
+            var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, false);
+            var appSettings = FindWebSiteSettings(storageAccount, blobContainerName, resourceGroup);
             if (appSettings == null)
             {
                 return 1;
@@ -449,14 +340,14 @@ partial class Program
                 exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos__DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
                 exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos__ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
                 );
-            using var file = cfgFile.OpenWrite();
+            using var file = ConfigFile.OpenWrite();
             JsonSerializer.Serialize(file, cfg);
-            console.WriteLine($"Configuration saved in {cfgFile.FullName}.");
+            WriteLine($"Configuration saved in {ConfigFile.FullName}.");
             return 0;
         }
         catch (InvalidOperationException ex)
         {
-            Error(console, ex.Message);
+            WriteError(ex.Message);
             return 1;
         }
     }
