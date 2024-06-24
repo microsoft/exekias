@@ -8,10 +8,10 @@
             "name": ".NET Core Launch (console)",
             "type": "coreclr",
             "request": "launch",
-            "preLaunchTask": "build",
+            // "preLaunchTask": "build",
             // If you have changed target frameworks, make sure to update the program path.
-            "program": "${workspaceFolder}/src/exekias/bin/Debug/net6.0/exekias.dll",
-            "args": [],
+            "program": "${workspaceFolder}/src/exekias/bin/Debug/net8.0/publish/exekias.dll",
+            "args": ["backend", "deploy", "--subscription", "MSRC One Platform", "--resourcegroup", "exekias-dev", "--storageaccount", "exekiasdevstore", "--blobcontainer", "runs"],
             "cwd": "${workspaceFolder}/src/exekias",
             // For more information about the 'console' field, see https://aka.ms/VSCode-CS-LaunchJson-Console
             "console": "internalConsole",

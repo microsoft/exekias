@@ -87,17 +87,25 @@ partial class Worker
             AllowSharedKeyAccess = false
         });
         // Deploy ARM resources using template file
-        ArmDeploymentResource deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed,
-            deploymentName,
-            new ArmDeploymentContent(
-                new ArmDeploymentProperties(ArmDeploymentMode.Incremental)
-                {
-                    Template = BinaryData.FromStream(File.OpenRead(templatePath)),
-                    Parameters = BinaryData.FromObjectAsJson(new JsonObject() {
+        ArmDeploymentResource deployment;
+        try
+        {
+            deployment = resourceGroup.GetArmDeployments().CreateOrUpdate(Azure.WaitUntil.Completed,
+                deploymentName,
+                new ArmDeploymentContent(
+                    new ArmDeploymentProperties(ArmDeploymentMode.Incremental)
+                    {
+                        Template = BinaryData.FromStream(File.OpenRead(templatePath)),
+                        Parameters = BinaryData.FromObjectAsJson(new JsonObject() {
                         {"runStoreName", new JsonObject(){ {"value", runStore.Data.Name } } },
                         {"storeContainer", new JsonObject(){ {"value", containerName } } }
-                    })
-                })).Value;
+                        })
+                    })).Value;
+        }
+        catch (Azure.RequestFailedException err)
+        {
+            throw new InvalidOperationException($"Deployment failed: {err.Message}");
+        }
         WriteLine("Deployment completed. The following resource have been created or updated:");
         foreach (var subResource in deployment.Data.Properties.OutputResources)
         {
@@ -281,6 +289,7 @@ partial class Worker
                 if (Config is not null)
                 {
                     WriteLine($"Using blob container name {runStoreContainerName} from {ConfigFile?.FullName}");
+                    blobContainerName = runStoreContainerName;
                     needConfirmation = true;
                 }
                 else if (storageAccount.GetBlobService().GetBlobContainers().Count() == 0)
@@ -298,7 +307,7 @@ partial class Worker
             {
                 return 1;
             }
-            DeployComponents(resourceGroup, storageAccount, runStoreContainerName, deploymentName);
+            DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName);
             return 0;
         }
         catch (InvalidOperationException ex)

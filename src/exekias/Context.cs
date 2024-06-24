@@ -7,13 +7,14 @@ using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 public record ExekiasConfig(
-    string runStoreUrl,
-    string runStoreMetadataFilePattern,
-    string exekiasStoreEndpoint,
-    string exekiasStoreDatabaseName,
-    string exekiasStoreContainerName);
+    [property: JsonRequired] string runStoreUrl,
+    [property: JsonRequired] string runStoreMetadataFilePattern,
+    [property: JsonRequired] string exekiasStoreEndpoint,
+    [property: JsonRequired] string exekiasStoreDatabaseName,
+    [property: JsonRequired] string exekiasStoreContainerName);
 
 public class Context(InvocationContext cmdContext)
 {
@@ -76,8 +77,11 @@ public class Context(InvocationContext cmdContext)
         if (cfgFile.Exists)
         {
             using var file = cfgFile.OpenRead();
-            _config = JsonSerializer.Deserialize<ExekiasConfig>(file);
-            if (_config == null)
+            try
+            {
+                _config = JsonSerializer.Deserialize<ExekiasConfig>(file);
+            }
+            catch (JsonException)
             {
                 WriteError($"File {cfgFile.FullName} has invalid format.");
             }
