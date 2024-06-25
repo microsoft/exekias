@@ -116,9 +116,9 @@ backendDeployCommand.AddOption(blobContainerOption);
 // backend allow <principal> -- allow a user or a group to access backend services.
 var backendAllowCommand = new Command("allow", "Allow a user or a group to access backend services.");
 backendCommand.AddCommand(backendAllowCommand);
-var backendAllowPrincipalArgument = new Argument<string>("principal", "User name or group name.");
+var backendAllowPrincipalArgument = new Argument<string>("principal", "User email, or group name, or a user/group id.");
 backendAllowCommand.AddArgument(backendAllowPrincipalArgument);
-backendAllowCommand.SetHandler(ctx => new Worker(ctx).DoBackendAllow(
+backendAllowCommand.SetHandler(async ctx => ctx.ExitCode = await new Worker(ctx).DoBackendAllow(
     ctx.ParseResult.GetValueForArgument(backendAllowPrincipalArgument)));
 
 

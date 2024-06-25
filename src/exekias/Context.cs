@@ -90,7 +90,7 @@ public class Context(InvocationContext cmdContext)
         return _config;
     }
 
-    string runStoreUrl => _config?.runStoreUrl ?? throw new InvalidOperationException("No config.");
+    string runStoreUrl => GetConfig()?.runStoreUrl ?? throw new InvalidOperationException("No config.");
 
     #endregion
     public static Option<FileInfo> configOption = new(
