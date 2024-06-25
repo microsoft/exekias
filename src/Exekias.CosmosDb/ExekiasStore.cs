@@ -10,7 +10,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.IO;
 using System.Text.RegularExpressions;
-using Azure.Core;
+using Exekias.Core.Azure;
 
 namespace Exekias.CosmosDb
 {
@@ -29,7 +29,6 @@ namespace Exekias.CosmosDb
         public const string OptionsSection = "ExekiasCosmos";
         readonly Options options;
         #endregion
-        readonly Exekias.Core.Azure.ICredentialProvider credentialProvider;
         readonly ILogger logger;
         readonly Task<Container> containerPromise;
         /// <summary>
@@ -43,13 +42,12 @@ namespace Exekias.CosmosDb
         public ExekiasStore(
             IOptions<Options>? options,
             ILogger<ExekiasStore>? logger,
-            Exekias.Core.Azure.ICredentialProvider credentialProvider)
+            ICredentialProvider credentialProvider)
         {
             if (null == options) throw new ArgumentNullException(nameof(options));
             this.options = options.Value;
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            containerPromise = InitializeContainer();
-            this.credentialProvider = credentialProvider;
+            containerPromise = InitializeContainer(credentialProvider);
         }
 
         class SystemTextJsonSerializer : CosmosSerializer
@@ -79,7 +77,7 @@ namespace Exekias.CosmosDb
             return triggerReader.ReadToEnd();
         });
 
-        Task<Container> InitializeContainer()
+        Task<Container> InitializeContainer(ICredentialProvider credentialProvider)
         {
             CosmosClient dbClient = new CosmosClient(
                 //options?.ConnectionString ?? throw new NullReferenceException($"ConnectionString not configured for {typeof(Options).FullName}")

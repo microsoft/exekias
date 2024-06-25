@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Exekias.AzureFunctions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Azure.Core;
 using Azure.Identity;
 
 var host = new HostBuilder()
@@ -14,7 +13,7 @@ var host = new HostBuilder()
     .ConfigureServices(services =>
     {
         services.AddCredentialProvider(
-            new ManagedIdentityCredential());
+            new DefaultAzureCredential());
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();
         services.AddRunStoreBlobs();
