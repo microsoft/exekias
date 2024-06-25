@@ -10,6 +10,7 @@ using Exekias.Core;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Immutable;
+using Azure.Core;
 
 namespace Exekias.SDS.Blob.Batch
 {
@@ -24,8 +25,9 @@ namespace Exekias.SDS.Blob.Batch
             IOptions<BatchProcessingOptions> batchProcessingOptions,
             IConfiguration configuration,
             DataImporter importer,
-            ILogger<ImportStoreBlob> logger)
-            : base(configurationOptions, importer, logger)
+            ILogger<ImportStoreBlob> logger,
+            TokenCredential credential)
+            : base(configurationOptions, importer, logger, credential)
         {
             if (batchProcessingOptions is null) throw new ArgumentNullException(nameof(batchProcessingOptions));
             options = batchProcessingOptions.Value;

@@ -5,11 +5,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Exekias.AzureFunctions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Azure.Core;
+using Azure.Identity;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
     .ConfigureServices(services =>
     {
+        services.AddSingleton<TokenCredential>(
+            new ManagedIdentityCredential());
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();
         services.AddRunStoreBlobs();

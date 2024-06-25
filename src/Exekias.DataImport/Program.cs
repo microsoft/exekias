@@ -11,6 +11,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.ApplicationInsights.Channel;
 using Microsoft.ApplicationInsights.Extensibility;
 using System.Text.Json;
+using Azure.Identity;
+using Azure.Core;
 
 var runId = args[0];
 var runFile = args[1];
@@ -22,6 +24,9 @@ try
         .ConfigureServices((hostBuilder, services) =>
         {
             services
+            .AddSingleton<TokenCredential>(
+                new ManagedIdentityCredential(
+                    Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY")))
             .AddRunStoreBlobs()
             .AddExekiasStoreCosmos()
             .AddImportStoreBlob()
@@ -52,7 +57,7 @@ try
     var exekiasStore = host.Services.GetRequiredService<IExekiasStore>();
 
     if (runFile == "-canary:write")
-    { 
+    {
         await exekiasStore.PutObject(new ExekiasObject() { Run = runId, Path = "a.json", LastWriteTime = DateTimeOffset.UtcNow, Type = ExekiasObjectType.Metadata });
         return;
     }

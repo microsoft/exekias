@@ -135,7 +135,7 @@ public class Context(InvocationContext cmdContext)
     }
 
     /// <summary>
-    /// Display a list t choose from and prompt for a choice.
+    /// Display a list to choose from and prompt for a choice.
     /// </summary>
     /// <param name="title">Title of the list.</param>
     /// <param name="items">Items to choose from.</param>

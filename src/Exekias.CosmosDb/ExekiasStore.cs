@@ -1,18 +1,15 @@
 ﻿using Microsoft.Azure.Cosmos;
-using Microsoft.Azure.Cosmos.Scripts;
 using Exekias.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.IO;
 using System.Text.RegularExpressions;
-using Azure.Identity;
 using Azure.Core;
 
 namespace Exekias.CosmosDb
@@ -32,6 +29,7 @@ namespace Exekias.CosmosDb
         public const string OptionsSection = "ExekiasCosmos";
         readonly Options options;
         #endregion
+        readonly TokenCredential credential;
         readonly ILogger logger;
         readonly Task<Container> containerPromise;
         /// <summary>
@@ -42,12 +40,13 @@ namespace Exekias.CosmosDb
         /// Typycally, obtained through dependency injection: 
         /// <c>services.Configure&lt;Exekias.CosmosDb.ExekiasStore.Options&gt;(Configuration.GetSection(Exekias.AzureStores.ExekiasCosmos.OptionsSection));</c>
         /// </remarks>
-        public ExekiasStore(IOptions<Options>? options, ILogger<ExekiasStore>? logger)
+        public ExekiasStore(IOptions<Options>? options, ILogger<ExekiasStore>? logger, TokenCredential credential)
         {
             if (null == options) throw new ArgumentNullException(nameof(options));
             this.options = options.Value;
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             containerPromise = InitializeContainer();
+            this.credential = credential;
         }
 
         class SystemTextJsonSerializer : CosmosSerializer
@@ -79,8 +78,6 @@ namespace Exekias.CosmosDb
 
         Task<Container> InitializeContainer()
         {
-            var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
-            var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
             CosmosClient dbClient = new CosmosClient(
                 //options?.ConnectionString ?? throw new NullReferenceException($"ConnectionString not configured for {typeof(Options).FullName}")
                 options?.Endpoint ?? throw new NullReferenceException($"Endpoint not configured for {typeof(Options).FullName}"),

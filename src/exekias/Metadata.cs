@@ -6,6 +6,22 @@ using System.Text.Json;
 partial class Worker
 {
 
+    ExekiasStore CreateExekiasStore(ExekiasConfig cfg)
+    {
+        return new ExekiasStore(Options.Create(new ExekiasStore.Options()
+        {
+            Endpoint = cfg.exekiasStoreEndpoint,
+            DatabaseName = cfg.exekiasStoreDatabaseName,
+            ContainerName = cfg.exekiasStoreContainerName
+        }), LoggerFactory.Create(builder =>
+        {
+            builder
+                .AddFilter("Exekias.CosmosDB", LogLevel.Error)
+                .AddConsole();
+        }).CreateLogger<ExekiasStore>(),
+        Credential);
+    }
+
     public async Task<int> DoQuery(
         string query,
         string orderBy,
@@ -18,17 +34,7 @@ partial class Worker
         {
             return 1;
         }
-        var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
-        {
-            Endpoint = Config.exekiasStoreEndpoint,
-            DatabaseName = Config.exekiasStoreDatabaseName,
-            ContainerName = Config.exekiasStoreContainerName
-        }), LoggerFactory.Create(builder =>
-        {
-            builder
-                .AddFilter("Exekias.CosmosDB", LogLevel.Error)
-                .AddConsole();
-        }).CreateLogger<ExekiasStore>());
+        var exekiasStore = CreateExekiasStore(Config);
         var result = await exekiasStore.QueryMetaObjects(query, orderBy.StartsWith("run.") ? orderBy.Substring(4) : orderBy, orderAscending, top, isHidden)
             .ToArrayAsync();
         if (jsonOutput)
@@ -52,17 +58,7 @@ partial class Worker
         {
             return 1;
         }
-        var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
-        {
-            Endpoint = Config.exekiasStoreEndpoint,
-            DatabaseName = Config.exekiasStoreDatabaseName,
-            ContainerName = Config.exekiasStoreContainerName
-        }), LoggerFactory.Create(builder =>
-        {
-            builder
-                .AddFilter("Exekias.CosmosDB", LogLevel.Error)
-                .AddConsole();
-        }).CreateLogger<ExekiasStore>());
+        var exekiasStore = CreateExekiasStore(Config);
         var result = await exekiasStore.GetMetaObject(runId);
         if (null == result)
         {
@@ -81,17 +77,7 @@ partial class Worker
         {
             return 1;
         }
-        var exekiasStore = new ExekiasStore(Options.Create(new ExekiasStore.Options()
-        {
-            Endpoint = Config.exekiasStoreEndpoint,
-            DatabaseName = Config.exekiasStoreDatabaseName,
-            ContainerName = Config.exekiasStoreContainerName
-        }), LoggerFactory.Create(builder =>
-        {
-            builder
-                .AddFilter("Exekias.CosmosDB", LogLevel.Error)
-                .AddConsole();
-        }).CreateLogger<ExekiasStore>());
+        var exekiasStore = CreateExekiasStore(Config);
         if (!await exekiasStore.SetHidden(runId, !unhide))
         {
             WriteError($"Run '{runId}' cannot be found.");
