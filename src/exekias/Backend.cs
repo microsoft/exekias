@@ -97,6 +97,7 @@ partial class Worker
                     {
                         Template = BinaryData.FromStream(File.OpenRead(templatePath)),
                         Parameters = BinaryData.FromObjectAsJson(new JsonObject() {
+                        {"location", new JsonObject(){ { "value", runStore.Data.Location.Name } } },
                         {"runStoreName", new JsonObject(){ {"value", runStore.Data.Name } } },
                         {"storeContainer", new JsonObject(){ {"value", containerName } } }
                         })
@@ -303,7 +304,7 @@ partial class Worker
             }
             var deploymentName = $"exekias_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
             WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
-            if (needConfirmation && Choose("Proceed?", new string[] { "Yes", "No" }, false) != 1)
+            if (needConfirmation && Choose("Proceed?", new string[] { "Yes", "No" }, false) != 0)
             {
                 return 1;
             }

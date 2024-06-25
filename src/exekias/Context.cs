@@ -114,7 +114,7 @@ public class Context(InvocationContext cmdContext)
                 $"Resources | where type =~ 'Microsoft.DocumentDB/databaseAccounts' and properties.documentEndpoint == 'https://comoptlabstore.documents.azure.com:443/'",
                 runStoreUrl);
 
-    public string runStoreContainerName => new Uri(runStoreUrl).LocalPath;
+    public string runStoreContainerName => new Uri(runStoreUrl).LocalPath.Substring(1);
 
     public bool IsInputRedirected => cmdContext.Console.IsInputRedirected;
 
@@ -128,12 +128,21 @@ public class Context(InvocationContext cmdContext)
 
     public void WriteError(string message)
     {
-        var savedColor = System.Console.ForegroundColor;
-        if (!Console.IsErrorRedirected) System.Console.ForegroundColor = ConsoleColor.Red;
+        var savedColor = Console.ForegroundColor;
+        if (!Console.IsErrorRedirected) Console.ForegroundColor = ConsoleColor.Red;
         Console.Error.WriteLine(message);
-        if (!Console.IsErrorRedirected) System.Console.ForegroundColor = savedColor;
+        if (!Console.IsErrorRedirected) Console.ForegroundColor = savedColor;
     }
 
+    /// <summary>
+    /// Display a list t choose from and prompt for a choice.
+    /// </summary>
+    /// <param name="title">Title of the list.</param>
+    /// <param name="items">Items to choose from.</param>
+    /// <param name="createNew">Add (create new) item on top.</param>
+    /// <returns>Index of the chosen item.</returns>
+    /// <exception cref="InvalidOperationException">System console is not interactive.</exception>
+    /// <exception cref="EndOfStreamException">Input has been closed without giving a choice.</exception>
     public int Choose(string title, string[] items, bool createNew)
     {
         if (Console.IsInputRedirected)
@@ -151,8 +160,8 @@ public class Context(InvocationContext cmdContext)
         while (input < 0)
         {
             cmdContext.Console.Write($"Choose a number between {lower} and {items.Length}: ");
-            line = System.Console.ReadLine();
-            if (line == null) { throw new System.IO.EndOfStreamException(); }
+            line = Console.ReadLine();
+            if (line == null) { throw new EndOfStreamException(); }
             if (int.TryParse(line, out int parsed) && parsed >= lower && parsed <= items.Length) { input = parsed; }
         }
         return input - 1;
