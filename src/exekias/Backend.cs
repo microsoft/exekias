@@ -10,13 +10,12 @@ using Azure.ResourceManager.EventGrid;
 using Azure.ResourceManager.EventGrid.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
-using Azure.ResourceManager.ResourceGraph;
 using Azure.ResourceManager.Storage;
 using Azure.ResourceManager.Storage.Models;
 using Azure.Storage.Blobs.Specialized;
 using System.Reflection;
 using System.Text.Json.Nodes;
-using Azure.ResourceManager.ResourceGraph.Models;
+using Entra = Microsoft.Graph.Models;
 
 partial class Worker
 {
@@ -237,6 +236,62 @@ partial class Worker
         }
     }
 
+    async Task<(Guid principalId, string principalName)> GetPrincipal(string principalId)
+    {
+        static (Guid principalId, string principalName) returnUser(Entra.User user) => 
+            (new Guid(user.Id!), $"user {user.DisplayName} {user.Mail}");
+
+        static (Guid principalId, string principalName) returnGroup(Entra.Group group) => 
+            (new Guid(group.Id!), $"group {group.DisplayName}");
+
+        var graphClient = new Microsoft.Graph.GraphServiceClient(Credential);
+        if (Guid.TryParse(principalId, out Guid guid))
+        {
+            var userOrGroup = await graphClient.DirectoryObjects[principalId].GetAsync();
+            if (userOrGroup is Entra.User user)
+            {
+                return returnUser(user);
+            }
+            else if (userOrGroup is Entra.Group group)
+            {
+                return returnGroup(group);
+            }
+        }
+        else
+        {
+            var userTask1 = graphClient.Users.GetAsync(requestConfiguration =>
+            {
+                requestConfiguration.QueryParameters.Filter = $"mail eq '{principalId}'";
+            });
+            var userTask2 = graphClient.Users.GetAsync(requestConfiguration =>
+            {
+                requestConfiguration.QueryParameters.Filter = $"userPrincipalName eq '{principalId}'";
+            });
+            var groupTask = graphClient.Groups.GetAsync(requestConfiguration =>
+            {
+                requestConfiguration.QueryParameters.Filter = $"displayName eq '{principalId}'";
+            });
+            try
+            {
+                await Task.WhenAll(userTask1, userTask2, groupTask);
+            }
+            catch (Entra.ODataErrors.ODataError) { }
+            if (userTask1.IsCompletedSuccessfully && userTask1.Result?.Value is not null && userTask1.Result.Value.Count==1)
+            {
+                return returnUser(userTask1.Result.Value[0]);
+            }
+            if (userTask2.IsCompletedSuccessfully && userTask2.Result?.Value is not null && userTask2.Result.Value.Count==1)
+            {
+                return returnUser(userTask2.Result.Value[0]);
+            }
+            if (groupTask.IsCompletedSuccessfully && groupTask.Result?.Value is not null && groupTask.Result.Value.Count==1)
+            {
+                return returnGroup(groupTask.Result.Value[0]);
+            }
+        }
+        throw new InvalidOperationException($"Cannot find user or group with id or mail '{principalId}'.");
+    }
+
     public int DoBackendDeploy(
         string? subscription,
         string? resourceGroupName,
@@ -334,24 +389,16 @@ partial class Worker
         }
     }
 
-    public int DoBackendAllow(string? principalId)
+    public async Task<int> DoBackendAllow(string principalId)
     {
-        var tenant = Arm.GetTenants().First();
-        var query = "Resources | where type =~ 'Microsoft.DocumentDB/databaseAccounts' and properties.documentEndpoint == 'https://comoptlabstore.documents.azure.com:443/'";
-        //var query = "Resources | where type =~ 'Microsoft.Storage/storageAccounts' | where name == 'comoptlabstore'";
-        ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
-        WriteLine($"{result.Count} {result.TotalRecords}");
-        WriteLine(JsonNode.Parse(result.Data)?.ToString() ?? "");
-        //foreach (var r in tenants.First().GetResources(new ResourceQueryContent("Resources | where type =~ 'Microsoft.Storage/storageAccounts'")).Value.Count)
-        //System.WriteLine();
-        //.GetAll().First().GetResources("");
-        //     var Config = LoadConfig(ConfigFile, console);
         try
         {
-            //         var principal = Guid.Parse(principalId!);
-            //         var storageAccount = Arm.GetStorageAccountResource(new ResourceIdentifier(rid!));
-            //         var cosmosAccount = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(rid!));
-            //         AuthorizeCredentials(storageAccount, cosmosAccount, principal, console);
+            (var principalGuid, var principalName) = await GetPrincipal(principalId);
+            WriteLine($"Authorizing {principalName} to access backend services.");
+            var runStoreResourceTask = Arm.GetStorageAccountResource(new ResourceIdentifier(runStoreResourceId)).GetAsync();
+            var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(exekiasStoreResourceId)).GetAsync();
+            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask);
+            AuthorizeCredentials(runStoreResourceTask.Result.Value, metaStoreResourceTask.Result.Value, principalGuid);
             return 0;
         }
         catch (Exception ex)
