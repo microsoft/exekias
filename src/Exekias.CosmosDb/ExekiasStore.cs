@@ -29,7 +29,7 @@ namespace Exekias.CosmosDb
         public const string OptionsSection = "ExekiasCosmos";
         readonly Options options;
         #endregion
-        readonly TokenCredential credential;
+        readonly Exekias.Core.Azure.ICredentialProvider credentialProvider;
         readonly ILogger logger;
         readonly Task<Container> containerPromise;
         /// <summary>
@@ -40,13 +40,16 @@ namespace Exekias.CosmosDb
         /// Typycally, obtained through dependency injection: 
         /// <c>services.Configure&lt;Exekias.CosmosDb.ExekiasStore.Options&gt;(Configuration.GetSection(Exekias.AzureStores.ExekiasCosmos.OptionsSection));</c>
         /// </remarks>
-        public ExekiasStore(IOptions<Options>? options, ILogger<ExekiasStore>? logger, TokenCredential credential)
+        public ExekiasStore(
+            IOptions<Options>? options,
+            ILogger<ExekiasStore>? logger,
+            Exekias.Core.Azure.ICredentialProvider credentialProvider)
         {
             if (null == options) throw new ArgumentNullException(nameof(options));
             this.options = options.Value;
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
             containerPromise = InitializeContainer();
-            this.credential = credential;
+            this.credentialProvider = credentialProvider;
         }
 
         class SystemTextJsonSerializer : CosmosSerializer
@@ -81,7 +84,7 @@ namespace Exekias.CosmosDb
             CosmosClient dbClient = new CosmosClient(
                 //options?.ConnectionString ?? throw new NullReferenceException($"ConnectionString not configured for {typeof(Options).FullName}")
                 options?.Endpoint ?? throw new NullReferenceException($"Endpoint not configured for {typeof(Options).FullName}"),
-                credential,
+                credentialProvider.GetCredential(),
                 new CosmosClientOptions() { Serializer = new SystemTextJsonSerializer() }
                 );
             logger.LogInformation("CosmosDB {0}/{1} at {2}", options.DatabaseName, options.ContainerName, dbClient.Endpoint);

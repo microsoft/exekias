@@ -1,5 +1,4 @@
 ﻿using Azure.Core;
-using Azure.Identity;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Exekias.Core;
@@ -46,7 +45,7 @@ namespace Exekias.AzureStores
             IOptions<Options> configurationOptions,
             IImporter importer,
             ILogger<RunStoreBlobContainer> logger,
-            TokenCredential credential)
+            Exekias.Core.Azure.ICredentialProvider credentialProvider)
             : base(configurationOptions, importer, logger)
         {
             var options = configurationOptions.Value;
@@ -54,7 +53,7 @@ namespace Exekias.AzureStores
                 throw new InvalidOperationException("BlobContainerUrl not configured");
             ContainerClient = options.BlobContainerUrl.StartsWith("§")
                 ? new BlobContainerClient("UseDevelopmentStorage=true", options.BlobContainerUrl.Substring(1))
-                : new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
+                : new BlobContainerClient(new Uri(options.BlobContainerUrl), credentialProvider.GetCredential());
             logger.LogInformation("Runs are in {0}", ContainerClient.Uri);
         }
         protected override async Task<IEnumerable<RunFile>> TraverseAll() =>

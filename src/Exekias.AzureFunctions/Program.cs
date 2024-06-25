@@ -1,4 +1,5 @@
 using Exekias.Core;
+using Exekias.Core.Azure;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,7 +13,7 @@ var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
     .ConfigureServices(services =>
     {
-        services.AddSingleton<TokenCredential>(
+        services.AddCredentialProvider(
             new ManagedIdentityCredential());
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();

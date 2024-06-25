@@ -7,12 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-		<PackageReference Include="Azure.Identity" Version="1.11.4" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.16.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Exekias.SDS\Exekias.SDS.csproj" />
+    <ProjectReference Include="..\Exekias.Core.Azure\Exekias.Core.Azure.csproj" />
   </ItemGroup>
 
 </Project>

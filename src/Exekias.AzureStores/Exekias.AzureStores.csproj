@@ -7,7 +7,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Azure.Identity" Version="1.11.4" />
 		<PackageReference Include="Azure.Storage.Blobs" Version="12.16.0" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="6.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="6.0.0" />
@@ -18,6 +17,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Exekias.Core\Exekias.Core.csproj" />
+		<ProjectReference Include="..\Exekias.Core.Azure\Exekias.Core.Azure.csproj" />
 	</ItemGroup>
 
 </Project>

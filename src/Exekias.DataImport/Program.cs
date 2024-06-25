@@ -6,6 +6,7 @@
 //
 using Microsoft.Extensions.Hosting;
 using Exekias.Core;
+using Exekias.Core.Azure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.ApplicationInsights.Channel;
@@ -24,7 +25,7 @@ try
         .ConfigureServices((hostBuilder, services) =>
         {
             services
-            .AddSingleton<TokenCredential>(
+            .AddCredentialProvider(
                 new ManagedIdentityCredential(
                     Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY")))
             .AddRunStoreBlobs()

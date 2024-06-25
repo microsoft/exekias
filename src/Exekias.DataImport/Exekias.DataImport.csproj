@@ -20,6 +20,7 @@
 		<ProjectReference Include="..\Exekias.Core\Exekias.Core.csproj" />
 		<ProjectReference Include="..\Exekias.CosmosDb\Exekias.CosmosDb.csproj" />
 		<ProjectReference Include="..\Exekias.SDS.Blob\Exekias.SDS.Blob.csproj" />
+		<ProjectReference Include="..\Exekias.Core.Azure\Exekias.Core.Azure.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -27,6 +28,6 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 	</ItemGroup>
-	<Import Project="../CopyNetCDF.targets"/>
+	<Import Project="../CopyNetCDF.targets" />
 
 </Project>

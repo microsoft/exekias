@@ -1,4 +1,5 @@
-﻿using Exekias.CosmosDb;
+﻿using Exekias.Core.Azure;
+using Exekias.CosmosDb;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -19,7 +20,7 @@ partial class Worker
                 .AddFilter("Exekias.CosmosDB", LogLevel.Error)
                 .AddConsole();
         }).CreateLogger<ExekiasStore>(),
-        Credential);
+        new CredentialProvider(Credential));
     }
 
     public async Task<int> DoQuery(

@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Exekias.SDS.Blob\Exekias.SDS.Blob.csproj" />
+    <ProjectReference Include="..\Exekias.Core.Azure\Exekias.Core.Azure.csproj" />
   </ItemGroup>
 
 </Project>
