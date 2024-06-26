@@ -138,8 +138,8 @@ jobs:
       - name: Deploy to Azure
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         run: |
-          src/exekias/bin/Release/net8.0/publish/exekias backend deploy --subscription ${{ env.EXEKIAS_SUBSCRIPTION }} --resourcegroup ${{ env.EXEKIAS_RESOURCEGROUP }} --storageaccount ${{ env.EXEKIAS_STORAGEACCOUNT }} --blobcountainer runs
-          src/exekias/bin/Release/net8.0/publish/exekias config create --subscription ${{ env.EXEKIAS_SUBSCRIPTION }} --resourcegroup ${{ env.EXEKIAS_RESOURCEGROUP }} --storageaccount ${{ env.EXEKIAS_STORAGEACCOUNT }} --blobcountainer runs
+          src/exekias/bin/Release/net8.0/publish/exekias backend deploy --subscription ${{ env.EXEKIAS_SUBSCRIPTION }} --resourcegroup ${{ env.EXEKIAS_RESOURCEGROUP }} --storageaccount ${{ env.EXEKIAS_STORAGEACCOUNT }} --blobcontainer runs
+          src/exekias/bin/Release/net8.0/publish/exekias config create --subscription ${{ env.EXEKIAS_SUBSCRIPTION }} --resourcegroup ${{ env.EXEKIAS_RESOURCEGROUP }} --storageaccount ${{ env.EXEKIAS_STORAGEACCOUNT }} --blobcontainer runs
 
       - name: Run canary test
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
