@@ -1,6 +1,22 @@
+Param(
+    [Parameter(Mandatory, HelpMessage = "Azure resource group name.")][string]
+    $resourceGroup,
+    [Parameter(Mandatory, HelpMessage = "Azure storage account name.")][string]
+    $storageAccount,
+    [Parameter(Mandatory, HelpMessage = "A path to exekias executable.")][string]
+    $exekias
+)
+
+if (-not (Test-Path $exekias)) {
+    Write-Error "Executable $exekias not found."
+    exit 1
+}
+
+$batch = Get-AzBatchAccountKey -ResourceGroupName $resourceGroup -Name "${storageAccount}8sync"  -WarningAction SilentlyContinue
+
 Write-Host "[$(Get-Date)] Creating and uploading a sample Run..."
 $sample_folder = "./sample"
-$runid = "12345678-123456-samples"
+$runid = "$(Get-Date -UFormat "%Y%m%d-%H%M%S")-samples"
 $upload_relative_path = "$sample_folder/upload/$runid"
 $download_relative_path = "$sample_folder/download"
 if (Test-Path ./sample) {
@@ -24,7 +40,7 @@ try {
     }
 
     Write-Host "[$(Get-Date)] Check data ls command output..."
-    $ls = & $exekias data ls 12345678-123456-samples
+    $ls = & $exekias data ls $runid
     if ($LASTEXITCODE -ne 0) {
         Write-Error "ls failed, exit code: $LASTEXITCODE"
         exit 1
@@ -41,7 +57,7 @@ try {
         Write-Error "Download failed, exit code: $LASTEXITCODE"
         exit 1
     }
-    $downloaded = Get-ChildItem -File -Path ./sample/download/12345678-123456-samples -Recurse
+    $downloaded = Get-ChildItem -File -Path "./sample/download/$runid" -Recurse
     if ($downloaded.length -ne $uploaded.length) {
         Write-Error "Download failed"
         exit 1
@@ -62,16 +78,18 @@ try {
             exit 1
         }
     }
-Write-Host "[$(Get-Date)] Waiting for a job to be created..."
-$batch = Get-AzBatchAccountKey -ResourceGroupName $resourceGroup -Name "${storageAccount}8sync"
+    Write-Host "[$(Get-Date)] Waiting for a job to be created..."
     $attempts = 5
     while ($attempts -gt -0) {
-$timeout = (Get-Date) + (New-TimeSpan -Seconds 120)
-while (((Get-Date) -lt $timeout) -and -not $batchjob) {
-    Start-Sleep -Seconds 5
-    $batchjob = Get-AzBatchJob -BatchContext $batch
-}
-        if ($batchjob -or $attempts -eq 1) {
+        $timeout = (Get-Date) + (New-TimeSpan -Seconds 120)
+        while (((Get-Date) -lt $timeout) -and -not $batchtask) {
+            Start-Sleep -Seconds 5
+            $batchjob = Get-AzBatchTask -JobId exekias -BatchContext $batch -ErrorAction SilentlyContinue
+            if ($batchjob) {
+                $batchtask = Get-AzBatchTask -JobId exekias -BatchContext $batch | Where-Object { $_.Id -Like "$runid*" }
+            }
+        }
+        if ($batchtask -or $attempts -eq 1) {
             $attempts = 0
         }
         else {
@@ -93,20 +111,20 @@ finally {
 } 
 
 Write-Host "[$(Get-Date)] Query for runs..."
-$runs = & $exekias runs query --json | ConvertFrom-Json
-if (($runs.Count -ne 1) -or ($runs[0].run -ne "12345678-123456-samples") -or ($runs.params.TestKey -ne "test value")) {
+$runs = & $exekias runs query "run.id = '$' and run.run = '$runid'" --json | ConvertFrom-Json
+if (($runs.Count -ne 1) -or ($runs[0].run -ne $runid) -or ($runs.params.TestKey -ne "test value")) {
     Write-Error "Query failed."
     exit 1
 }
 
 Write-Host "[$(Get-Date)] Check hiding/unhiding runs..."
-& $exekias runs hide "12345678-123456-samples"
-if (((& $exekias runs query) -contains "12345678-123456-samples") -or -not ((& $exekias runs query --hidden) -contains "12345678-123456-samples")) {
+& $exekias runs hide $runid
+if (((& $exekias runs query) -contains $runid) -or -not ((& $exekias runs query --hidden) -contains $runid)) {
     Write-Error "Hiding failed."
     exit 1
 }
-& $exekias runs hide "12345678-123456-samples" --unhide
-if (-not ((& $exekias runs query) -contains "12345678-123456-samples") -or ((& $exekias runs query --hidden) -contains "12345678-123456-samples")) {
+& $exekias runs hide $runid --unhide
+if (-not ((& $exekias runs query) -contains $runid) -or ((& $exekias runs query --hidden) -contains $runid)) {
     Write-Error "Unhiding failed."
     exit 1
 }
@@ -115,15 +133,15 @@ Write-Host "[$(Get-Date)] Waiting for a job task to be completed..."
 $timeout = (Get-Date) + (New-TimeSpan -Minutes 20)
 while (((Get-Date) -lt $timeout) -and ($batchtaskstate -ne "Completed")) {
     Start-Sleep -Seconds 5
-    $batchtaskstate = (Get-AzBatchTask -JobId exekias -BatchContext $batch).State
+    $batchtaskstate = (Get-AzBatchTask -JobId exekias -BatchContext $batch | Where-Object { $_.Id -Like "$runid*"}).State
 }
 if ($batchtaskstate -ne "Completed") {
     Write-Error "Batch task didn't complete within 20 mins."
     exit 1
 }
 Write-Host "[$(Get-Date)] Checking batch task execution result:"
-(Get-AzBatchTask -JobId exekias -BatchContext $batch).ExecutionInformation | Select-Object Result, FailureInformation
-$runs = & $exekias runs show "12345678-123456-samples" | ConvertFrom-Json
+(Get-AzBatchTask -JobId exekias -BatchContext $batch | Where-Object { $_.Id -Like "$runid*"}).ExecutionInformation | Select-Object Result, FailureInformation
+$runs = & $exekias runs show $runid | ConvertFrom-Json
 if (-not ($runs.Variables.CSV -and ($runs.Variables.CSV[0] -eq "columnTitle"))) {
     Write-Error "Run metadata doesn't have updated information about data columns."
     exit 1

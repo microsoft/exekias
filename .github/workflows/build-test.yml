@@ -117,6 +117,7 @@ jobs:
       # The access tokens themselves have longer 60 min valid lifetime.
       - name: Getting access tokens for Azure CLI (Linux)
         if: matrix.os == 'ubuntu-latest'
+        # azure/cli action is not available for Windows
         uses: azure/cli@v2
         with:
           inlineScript: |
@@ -134,12 +135,18 @@ jobs:
           inlineScript: |
             Get-AzAccessToken -ResourceTypeName Storage | Select-Object ExpiresOn
 
+      - name: Deploy to Azure
+        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
+        run: |
+          ${{ env.EXEKIAS_BIN }} backend deploy --subscription ${{ env.EXEKIAS_SUBSCRIPTION }} --resourcegroup ${{ env.EXEKIAS_RESOURCEGROUP }} --storageaccount ${{ env.EXEKIAS_STORAGEACCOUNT }} --blobcountainer runs
+          ${{ env.EXEKIAS_BIN }} config create --subscription ${{ env.EXEKIAS_SUBSCRIPTION }} --resourcegroup ${{ env.EXEKIAS_RESOURCEGROUP }} --storageaccount ${{ env.EXEKIAS_STORAGEACCOUNT }} --blobcountainer runs
+
       - name: Run canary test
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/powershell@v2
         with:
             inlineScript: |
-              ./exekias-canary-test.ps1
+              ./canary-test.ps1 ${{ env.EXEKIAS_RESOURCEGROUP }} ${{ env.EXEKIAS_STORAGEACCOUNT }}
             azPSVersion: "latest"
         env:
           EXEKIAS_BIN: src/exekias/bin/Release/net6.0/publish/${{ env.BIN_NAME }}
