@@ -28,7 +28,8 @@ namespace Exekias.AzureStorageEmulator.Tests
             store = new RunStoreBlobContainer(
                 MakeOptions(),
                 new Core.Tests.ImporterMock(),
-                new NullLogger<RunStoreBlobContainer>());
+                new NullLogger<RunStoreBlobContainer>(),
+                null);
             container = new BlobContainerClient(StorageEmulatorFixture.ConnectionString, blobContainerName);
             container.CreateIfNotExists();
         }
@@ -49,7 +50,8 @@ namespace Exekias.AzureStorageEmulator.Tests
             Assert.Throws<InvalidOperationException>(() => new RunStoreBlobContainer(
                 MakeOptions(bcn: null),
                 new Core.Tests.ImporterMock(),
-                new NullLogger<RunStoreBlobContainer>()));
+                new NullLogger<RunStoreBlobContainer>(),
+                null));
         }
 
         [Fact]
@@ -71,7 +73,8 @@ namespace Exekias.AzureStorageEmulator.Tests
             var storeMock = new Mock<RunStoreBlobContainer>(
                 MakeOptions(),
                 new Core.Tests.ImporterMock(),
-                new NullLogger<RunStoreBlobContainer>());
+                new NullLogger<RunStoreBlobContainer>(),
+                null);
             storeMock.CallBase = true;
             storeMock.Protected().SetupGet<BlobContainerClient>("ContainerClient").Returns(containerMock.Object);
             await Assert.ThrowsAsync<TestException>(() => storeMock.Object.GetLocalFile("anything.csv").AsTask());
