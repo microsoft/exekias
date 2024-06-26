@@ -91,6 +91,7 @@ public class Context(InvocationContext cmdContext)
     }
 
     string runStoreUrl => GetConfig()?.runStoreUrl ?? throw new InvalidOperationException("No config.");
+    string exekiasStoreUrl => GetConfig()?.exekiasStoreEndpoint ?? throw new InvalidOperationException("No config.");
 
     #endregion
     public static Option<FileInfo> configOption = new(
@@ -111,8 +112,8 @@ public class Context(InvocationContext cmdContext)
                 runStoreUrl);
 
     public string exekiasStoreResourceId => resourceId(
-                $"Resources | where type =~ 'Microsoft.DocumentDB/databaseAccounts' and properties.documentEndpoint == 'https://comoptlabstore.documents.azure.com:443/'",
-                runStoreUrl);
+                $"Resources | where type =~ 'Microsoft.DocumentDB/databaseAccounts' and properties.documentEndpoint == '{exekiasStoreUrl}'",
+                exekiasStoreUrl);
 
     public string runStoreContainerName => new Uri(runStoreUrl).LocalPath.Substring(1);
 

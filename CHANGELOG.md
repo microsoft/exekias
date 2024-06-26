@@ -6,10 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [2.3.0] - 2024-06-26
+
+### Added
+- `exekias backend allow user/group` command to add role assignments necessary to work with the backend.
+- `--credential` option added to the `exekias` utility for fine grained control of user authentication.
 
 ### Security
 - Upgrade package references due to vulnerable version of `Azure.Identity`.
 - `exekias backend deploy` command creates Cosmos DB account configured for minimum TSL version 1.2.
+- Azure CosmosDB and Storage accounts requests can no longer be authorized with keys, only Entra ID access tokens.
 
 
 ## [2.2.1] - 2024-01-18
