@@ -14,19 +14,17 @@
   </ItemGroup>
 
   <ItemGroup>
-		<PackageReference Include="Azure.Identity" Version="1.11.4" />
-    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.33.0" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.41.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="6.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.3" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="6.0.0" />
-	  <!-- Reference newer version directly since Cosmos 3.33 references vulberable version -->
-	  <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="System.Text.Json" Version="6.0.7" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Exekias.Core\Exekias.Core.csproj" />
+    <ProjectReference Include="..\Exekias.Core.Azure\Exekias.Core.Azure.csproj" />
   </ItemGroup>
 
 </Project>

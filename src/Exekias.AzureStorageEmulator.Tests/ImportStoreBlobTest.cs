@@ -17,7 +17,7 @@ namespace Exekias.AzureStorageEmulator.Tests
             store = new ImportStoreBlob(Microsoft.Extensions.Options.Options.Create(new ImportStoreBlob.Options()
             {
                 BlobContainerUrl = "§" + blobContainerName
-            }), importer, new NullLogger<ImportStoreBlob>());
+            }), importer, new NullLogger<ImportStoreBlob>(), null);
             new BlobContainerClient(StorageEmulatorFixture.ConnectionString, blobContainerName).CreateIfNotExists();
         }
 

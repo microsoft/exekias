@@ -1,19 +1,16 @@
 ﻿using Microsoft.Azure.Cosmos;
-using Microsoft.Azure.Cosmos.Scripts;
 using Exekias.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.IO;
 using System.Text.RegularExpressions;
-using Azure.Identity;
-using Azure.Core;
+using Exekias.Core.Azure;
 
 namespace Exekias.CosmosDb
 {
@@ -42,12 +39,15 @@ namespace Exekias.CosmosDb
         /// Typycally, obtained through dependency injection: 
         /// <c>services.Configure&lt;Exekias.CosmosDb.ExekiasStore.Options&gt;(Configuration.GetSection(Exekias.AzureStores.ExekiasCosmos.OptionsSection));</c>
         /// </remarks>
-        public ExekiasStore(IOptions<Options>? options, ILogger<ExekiasStore>? logger)
+        public ExekiasStore(
+            IOptions<Options>? options,
+            ILogger<ExekiasStore>? logger,
+            ICredentialProvider credentialProvider)
         {
             if (null == options) throw new ArgumentNullException(nameof(options));
             this.options = options.Value;
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            containerPromise = InitializeContainer();
+            containerPromise = InitializeContainer(credentialProvider);
         }
 
         class SystemTextJsonSerializer : CosmosSerializer
@@ -77,14 +77,12 @@ namespace Exekias.CosmosDb
             return triggerReader.ReadToEnd();
         });
 
-        Task<Container> InitializeContainer()
+        Task<Container> InitializeContainer(ICredentialProvider credentialProvider)
         {
-            var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
-            var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
             CosmosClient dbClient = new CosmosClient(
                 //options?.ConnectionString ?? throw new NullReferenceException($"ConnectionString not configured for {typeof(Options).FullName}")
                 options?.Endpoint ?? throw new NullReferenceException($"Endpoint not configured for {typeof(Options).FullName}"),
-                credential,
+                credentialProvider.GetCredential(),
                 new CosmosClientOptions() { Serializer = new SystemTextJsonSerializer() }
                 );
             logger.LogInformation("CosmosDB {0}/{1} at {2}", options.DatabaseName, options.ContainerName, dbClient.Endpoint);

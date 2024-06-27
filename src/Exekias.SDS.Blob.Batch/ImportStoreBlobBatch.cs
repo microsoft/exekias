@@ -7,9 +7,11 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Exekias.Core;
+using Exekias.Core.Azure;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Immutable;
+using Azure.Core;
 
 namespace Exekias.SDS.Blob.Batch
 {
@@ -24,8 +26,9 @@ namespace Exekias.SDS.Blob.Batch
             IOptions<BatchProcessingOptions> batchProcessingOptions,
             IConfiguration configuration,
             DataImporter importer,
-            ILogger<ImportStoreBlob> logger)
-            : base(configurationOptions, importer, logger)
+            ILogger<ImportStoreBlob> logger,
+            ICredentialProvider credentialProvider)
+            : base(configurationOptions, importer, logger, credentialProvider)
         {
             if (batchProcessingOptions is null) throw new ArgumentNullException(nameof(batchProcessingOptions));
             options = batchProcessingOptions.Value;

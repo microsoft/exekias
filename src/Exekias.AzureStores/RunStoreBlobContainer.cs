@@ -1,5 +1,4 @@
 ﻿using Azure.Core;
-using Azure.Identity;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Exekias.Core;
@@ -45,17 +44,16 @@ namespace Exekias.AzureStores
         public RunStoreBlobContainer(
             IOptions<Options> configurationOptions,
             IImporter importer,
-            ILogger<RunStoreBlobContainer> logger)
+            ILogger<RunStoreBlobContainer> logger,
+            Exekias.Core.Azure.ICredentialProvider credentialProvider)
             : base(configurationOptions, importer, logger)
         {
             var options = configurationOptions.Value;
             if (string.IsNullOrWhiteSpace(options?.BlobContainerUrl))
                 throw new InvalidOperationException("BlobContainerUrl not configured");
-            var managedIdentity = Environment.GetEnvironmentVariable("USER_ASSIGNED_MANAGED_IDENTITY");
-            var credential = managedIdentity == null ? (TokenCredential) new DefaultAzureCredential() : new ManagedIdentityCredential(managedIdentity);
-            ContainerClient = options.BlobContainerUrl.StartsWith("§") 
+            ContainerClient = options.BlobContainerUrl.StartsWith("§")
                 ? new BlobContainerClient("UseDevelopmentStorage=true", options.BlobContainerUrl.Substring(1))
-                : new BlobContainerClient(new Uri(options.BlobContainerUrl), credential);
+                : new BlobContainerClient(new Uri(options.BlobContainerUrl), credentialProvider.GetCredential());
             logger.LogInformation("Runs are in {0}", ContainerClient.Uri);
         }
         protected override async Task<IEnumerable<RunFile>> TraverseAll() =>
@@ -68,17 +66,17 @@ namespace Exekias.AzureStores
             ContainerClient
                 .GetBlobsAsync(prefix: runPath == "" ? "" : runPath + '/')
                 .Where(item => item.Properties.ContentLength > 0)  //{
-                    //if (item.Properties.ContentLength <= 0)
-                    //    return false;
-                    //if (item.Properties.ContentLength > 100*1024*1024)
-                    //{
-                    //    // Azure Function on Consumption plan has only 500MB temp space
-                    //    // See https://github.com/projectkudu/kudu/wiki/Understanding-the-Azure-App-Service-file-system#temporary-files
-                    //    logger.LogWarning("Blob size > 100MB, ignore {runPath}.", item.Name);
-                    //    return false;
-                    //}
-                    //return true;
-                //})
+                                                                   //if (item.Properties.ContentLength <= 0)
+                                                                   //    return false;
+                                                                   //if (item.Properties.ContentLength > 100*1024*1024)
+                                                                   //{
+                                                                   //    // Azure Function on Consumption plan has only 500MB temp space
+                                                                   //    // See https://github.com/projectkudu/kudu/wiki/Understanding-the-Azure-App-Service-file-system#temporary-files
+                                                                   //    logger.LogWarning("Blob size > 100MB, ignore {runPath}.", item.Name);
+                                                                   //    return false;
+                                                                   //}
+                                                                   //return true;
+                                                                   //})
                 .Select(BlobItemToRunFile);
 
         RunFile BlobItemToRunFile(BlobItem item)

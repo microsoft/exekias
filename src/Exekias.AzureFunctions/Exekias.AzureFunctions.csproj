@@ -5,7 +5,6 @@
     <OutputType>Exe</OutputType>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>exekias</UserSecretsId>
       </PropertyGroup>
   <Import Project="../../Version.proj" />
   <ItemGroup>
@@ -20,13 +19,13 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.17.0" />
     <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.22.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="1.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="6.0.1" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Exekias.AzureStores\Exekias.AzureStores.csproj" />
     <ProjectReference Include="..\Exekias.Core\Exekias.Core.csproj" />
     <ProjectReference Include="..\Exekias.CosmosDb\Exekias.CosmosDb.csproj" />
     <ProjectReference Include="..\Exekias.SDS.Blob.Batch\Exekias.SDS.Blob.Batch.csproj" />
+    <ProjectReference Include="..\Exekias.Core.Azure\Exekias.Core.Azure.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">
