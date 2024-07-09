@@ -121,6 +121,15 @@ partial class Worker
         var batchPoolId = deploymentOutput["batchPoolId"]?["value"]?.GetValue<string?>();
         var metaStoreId = deploymentOutput["metaStoreId"]?["value"]?.GetValue<string?>();
 
+        // authorize the user to access the backend services
+        var token = Credential.GetToken(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
+        string base64Payload = token.Token.Split('.')[1];
+        var paddingLength = (4 - base64Payload.Length % 4) % 4;
+        var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
+        var principalId = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement.GetProperty("oid").GetGuid();
+        CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
+        AuthorizeCredentials(runStore, metaStore, principalId);
+
         // deploy syncFunction code from sync.zip
         var runChangeEventSink = "RunChangeEventSink";
         WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
@@ -144,14 +153,6 @@ partial class Worker
         WriteLine("Adding application package to batch account.");
         PoolAssignApplication(batchPoolId!,
             UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0"));
-
-        var token = Credential.GetToken(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
-        string base64Payload = token.Token.Split('.')[1];
-        var paddingLength = (4 - base64Payload.Length % 4) % 4;
-        var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
-        var principalId = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement.GetProperty("oid").GetGuid();
-        CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
-        AuthorizeCredentials(runStore, metaStore, principalId);
     }
 
     WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath, string expected)
