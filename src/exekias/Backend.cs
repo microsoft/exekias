@@ -89,6 +89,21 @@ partial class Worker
             AllowBlobPublicAccess = false,
             AllowSharedKeyAccess = false
         });
+        // Get the principal id of the current user
+        var token = Credential.GetToken(new TokenRequestContext(["https://management.azure.com/.default"]), CancellationToken.None);
+        string base64Payload = token.Token.Split('.')[1];
+        var paddingLength = (4 - base64Payload.Length % 4) % 4;
+        var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
+        var tokenClaims = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement;
+        var principalId = tokenClaims.GetProperty("oid").GetGuid();
+        var principalName = "";
+        try
+        {
+            principalName = tokenClaims.GetProperty("upn").GetString();
+        }
+        catch (Exception) { }
+        WriteLine($"Using credential for {principalName} {principalId}");
+
         // Deploy ARM resources using template file
         ArmDeploymentResource deployment;
         try
@@ -103,7 +118,8 @@ partial class Worker
                         {"location", new JsonObject(){ { "value", runStore.Data.Location.Name } } },
                         {"runStoreName", new JsonObject(){ {"value", runStore.Data.Name } } },
                         {"storeContainer", new JsonObject(){ {"value", containerName } } },
-                        {"metadataFilePattern", new JsonObject(){ {"value", metadataFilePattern } } }
+                        {"metadataFilePattern", new JsonObject(){ {"value", metadataFilePattern } } },
+                        {"deploymentPrincipalId", new JsonObject(){ {"value", principalId.ToString() } } }
                         })
                     })).Value;
         }
@@ -111,7 +127,7 @@ partial class Worker
         {
             throw new InvalidOperationException($"Deployment failed: {err.Message}");
         }
-        WriteLine("Deployment completed. The following resource have been created or updated:");
+        WriteLine("The following resource have been created or updated:");
         foreach (var subResource in deployment.Data.Properties.OutputResources)
         {
             if (subResource is not null)
@@ -127,11 +143,6 @@ partial class Worker
         var metaStoreId = deploymentOutput["metaStoreId"]?["value"]?.GetValue<string?>();
 
         // authorize the user to access the backend services
-        var token = Credential.GetToken(new TokenRequestContext(["https://management.azure.com/.default"]), CancellationToken.None);
-        string base64Payload = token.Token.Split('.')[1];
-        var paddingLength = (4 - base64Payload.Length % 4) % 4;
-        var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
-        var principalId = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement.GetProperty("oid").GetGuid();
         CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
         AuthorizeCredentials(runStore, metaStore, principalId);
 
