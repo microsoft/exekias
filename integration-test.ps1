@@ -16,10 +16,10 @@ $batch = Get-AzBatchAccountKey -ResourceGroupName $resourceGroup -Name "${storag
 
 Write-Host "[$(Get-Date)] Creating and uploading a sample Run..."
 $sample_folder = "./sample"
-$runid = "$(Get-Date -UFormat "%Y%m%d-%H%M%S")-samples"
+$runid = "$(Get-Date -UFormat "%Y%m%d-%H%M%S")-integration-test"
 $upload_relative_path = "$sample_folder/upload/$runid"
 $download_relative_path = "$sample_folder/download"
-if (Test-Path ./sample) {
+if (Test-Path $sample_folder) {
     Remove-Item -Path $sample_folder -Recurse
 }
 $upload_folder = New-Item -Path "$upload_relative_path/sub folder" -ItemType Directory | Select-Object -ExpandProperty Parent
@@ -57,7 +57,7 @@ try {
         Write-Error "Download failed, exit code: $LASTEXITCODE"
         exit 1
     }
-    $downloaded = Get-ChildItem -File -Path "./sample/download/$runid" -Recurse
+    $downloaded = Get-ChildItem -File -Path "$sample_folder/download/$runid" -Recurse
     if ($downloaded.length -ne $uploaded.length) {
         Write-Error "Download failed"
         exit 1
