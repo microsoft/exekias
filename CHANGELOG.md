@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - in `exekias backend deploy` command, user authorization is now properly set up for the backend.
+- restore diagnostics of non-existant config file.
 
 ### Added
 - `--metadatafilepattern` option added to the `exekias backend deploy` command for fine grained control of metadata file pattern.

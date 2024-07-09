@@ -308,7 +308,7 @@ partial class Worker
         }
         throw new InvalidOperationException($"Cannot find user or group with id or mail '{principalId}'.");
     }
-    
+
     public const string METADATA_FILE_PATTERN = @"^(?<runId>(?<timestamp>(?<date>[\d]+)-(?<time>[\d]+))-(?<title>[^/]*))/params.json$";
 
     public int DoBackendDeploy(
@@ -332,7 +332,7 @@ partial class Worker
 
             bool needConfirmation = false;
             SubscriptionResource subscriptionResource;
-            if (subscription is null && Config is not null)
+            if (subscription is null && ConfigOrNone is not null)
             {
                 subscriptionResource = runStoreSubscription.Value;
                 WriteLine($"Using subscription {subscriptionResource.Data.DisplayName} from {ConfigFile?.FullName}");
@@ -345,7 +345,7 @@ partial class Worker
 
             if (!SubscriptionHasRequiredProviders(subscriptionResource)) { return 1; }
 
-            if (resourceGroupName is null && Config is not null)
+            if (resourceGroupName is null && ConfigOrNone is not null)
             {
                 resourceGroupName = runStoreResource.Value.Data.Id.ResourceGroupName;
                 WriteLine($"Using resource group name {resourceGroupName} from {ConfigFile?.FullName}");
@@ -353,7 +353,7 @@ partial class Worker
             }
             var resourceGroup = AskResourceGroup(resourceGroupName, subscriptionResource, true, location);
 
-            if (storageAccountName is null && Config is not null)
+            if (storageAccountName is null && ConfigOrNone is not null)
             {
                 storageAccountName = runStoreResource.Value.Data.Name;
                 WriteLine($"Using storage account name {storageAccountName} from {ConfigFile?.FullName}");
@@ -362,7 +362,7 @@ partial class Worker
             var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, true);
             if (blobContainerName is null)
             {
-                if (Config is not null)
+                if (ConfigOrNone is not null)
                 {
                     WriteLine($"Using blob container name {runStoreContainerName} from {ConfigFile?.FullName}");
                     blobContainerName = runStoreContainerName;
@@ -379,10 +379,10 @@ partial class Worker
             }
             if (metadataFilePattern is null)
             {
-                if (Config is not null)
+                if (ConfigOrNone is not null)
                 {
                     WriteLine($"Using metadata file pattern {metadataFilePattern} from {ConfigFile?.FullName}");
-                    metadataFilePattern = Config.runStoreMetadataFilePattern;
+                    metadataFilePattern = ConfigOrNone.runStoreMetadataFilePattern;
                     needConfirmation = true;
                 }
                 else { metadataFilePattern = METADATA_FILE_PATTERN; }
@@ -421,6 +421,7 @@ partial class Worker
 
     public async Task<int> DoBackendAllow(string principalId)
     {
+        if (ConfigDoesNotExist) { return 1; }
         try
         {
             (var principalGuid, var principalName) = await GetPrincipal(principalId);

@@ -5,12 +5,12 @@ partial class Worker
 {
     BlobContainerClient CreateBlobContainerClient()
     {
-        return new BlobContainerClient(new Uri(Config!.runStoreUrl), Credential);
+        return new BlobContainerClient(new Uri(Config.runStoreUrl), Credential);
     }
 
     public async Task<int> DoDataLs(string run)
     {
-        if (Config == null)
+        if (ConfigDoesNotExist)
         {
             return 1;
         }
@@ -38,7 +38,7 @@ partial class Worker
 
     public async Task<int> DoDataUpload(string path)
     {
-        if (Config == null)
+        if (ConfigDoesNotExist)
         {
             return 1;
         }
@@ -111,7 +111,7 @@ partial class Worker
     // download all data files for a run to a local path
     public async Task<int> DoDataDownload(string run, string path)
     {
-        if (Config == null)
+        if (ConfigDoesNotExist)
         {
             return 1;
         }
