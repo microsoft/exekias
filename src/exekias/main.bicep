@@ -4,7 +4,7 @@ param location string = resourceGroup().location
 
 param runStoreName string
 param storeContainer string
-param metadataFilePattern string = '^(?<runId>(?<timestamp>(?<date>[\\d]+)-(?<time>[\\d]+))-(?<title>[^/]*))/params.json$'
+param metadataFilePattern string
 param batchVmSize string = 'Standard_E2_v3'
 
 var syncName = '${take(runStoreName, 19)}8sync'

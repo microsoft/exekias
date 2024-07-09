@@ -61,7 +61,12 @@ partial class Worker
         return result;
     }
 
-    public void DeployComponents(ResourceGroupResource resourceGroup, StorageAccountResource runStore, string containerName, string deploymentName)
+    public void DeployComponents(
+        ResourceGroupResource resourceGroup,
+        StorageAccountResource runStore,
+        string containerName,
+        string deploymentName,
+        string metadataFilePattern)
     {
         //
         // Assumes the directory contains packages 'sync.zip', 'fetch.zip' and 'tables.zip'.
@@ -69,8 +74,7 @@ partial class Worker
         // and then zipping the contents of the 'bin/Debug/net6.0/publish' directory.
         // See `exekiascmd.ps1` script.
         //
-        var basePath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location);
-        if (basePath is null) { throw new InvalidOperationException("Cannot determine application base path"); }
+        var basePath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location) ?? throw new InvalidOperationException("Cannot determine application base path");
         var templatePath = Path.Combine(basePath, "main.json");
         var syncPackagePath = Path.Combine(basePath, "Exekias.AzureFunctions.zip");
         var tablesPath = Path.Combine(basePath, "Exekias.DataImport.zip");
@@ -98,7 +102,8 @@ partial class Worker
                         Parameters = BinaryData.FromObjectAsJson(new JsonObject() {
                         {"location", new JsonObject(){ { "value", runStore.Data.Location.Name } } },
                         {"runStoreName", new JsonObject(){ {"value", runStore.Data.Name } } },
-                        {"storeContainer", new JsonObject(){ {"value", containerName } } }
+                        {"storeContainer", new JsonObject(){ {"value", containerName } } },
+                        {"metadataFilePattern", new JsonObject(){ {"value", metadataFilePattern } } }
                         })
                     })).Value;
         }
@@ -122,7 +127,7 @@ partial class Worker
         var metaStoreId = deploymentOutput["metaStoreId"]?["value"]?.GetValue<string?>();
 
         // authorize the user to access the backend services
-        var token = Credential.GetToken(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
+        var token = Credential.GetToken(new TokenRequestContext(["https://management.azure.com/.default"]), CancellationToken.None);
         string base64Payload = token.Token.Split('.')[1];
         var paddingLength = (4 - base64Payload.Length % 4) % 4;
         var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
@@ -239,10 +244,10 @@ partial class Worker
 
     async Task<(Guid principalId, string principalName)> GetPrincipal(string principalId)
     {
-        static (Guid principalId, string principalName) returnUser(Entra.User user) => 
+        static (Guid principalId, string principalName) returnUser(Entra.User user) =>
             (new Guid(user.Id!), $"user {user.DisplayName} {user.Mail}");
 
-        static (Guid principalId, string principalName) returnGroup(Entra.Group group) => 
+        static (Guid principalId, string principalName) returnGroup(Entra.Group group) =>
             (new Guid(group.Id!), $"group {group.DisplayName}");
 
         var graphClient = new Microsoft.Graph.GraphServiceClient(Credential);
@@ -277,28 +282,31 @@ partial class Worker
                 await Task.WhenAll(userTask1, userTask2, groupTask);
             }
             catch (Entra.ODataErrors.ODataError) { }
-            if (userTask1.IsCompletedSuccessfully && userTask1.Result?.Value is not null && userTask1.Result.Value.Count==1)
+            if (userTask1.IsCompletedSuccessfully && userTask1.Result?.Value is not null && userTask1.Result.Value.Count == 1)
             {
                 return returnUser(userTask1.Result.Value[0]);
             }
-            if (userTask2.IsCompletedSuccessfully && userTask2.Result?.Value is not null && userTask2.Result.Value.Count==1)
+            if (userTask2.IsCompletedSuccessfully && userTask2.Result?.Value is not null && userTask2.Result.Value.Count == 1)
             {
                 return returnUser(userTask2.Result.Value[0]);
             }
-            if (groupTask.IsCompletedSuccessfully && groupTask.Result?.Value is not null && groupTask.Result.Value.Count==1)
+            if (groupTask.IsCompletedSuccessfully && groupTask.Result?.Value is not null && groupTask.Result.Value.Count == 1)
             {
                 return returnGroup(groupTask.Result.Value[0]);
             }
         }
         throw new InvalidOperationException($"Cannot find user or group with id or mail '{principalId}'.");
     }
+    
+    public const string METADATA_FILE_PATTERN = @"^(?<runId>(?<timestamp>(?<date>[\d]+)-(?<time>[\d]+))-(?<title>[^/]*))/params.json$";
 
     public int DoBackendDeploy(
         string? subscription,
         string? resourceGroupName,
         string? location,
         string? storageAccountName,
-        string? blobContainerName)
+        string? blobContainerName,
+        string? metadataFilePattern)
     {
         try
         {
@@ -341,7 +349,7 @@ partial class Worker
                 needConfirmation = true;
             }
             var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, true);
-            if (blobContainerName == null)
+            if (blobContainerName is null)
             {
                 if (Config is not null)
                 {
@@ -349,7 +357,7 @@ partial class Worker
                     blobContainerName = runStoreContainerName;
                     needConfirmation = true;
                 }
-                else if (storageAccount.GetBlobService().GetBlobContainers().Count() == 0)
+                else if (!storageAccount.GetBlobService().GetBlobContainers().Any())
                 {
                     blobContainerName = "runs";
                 }
@@ -358,13 +366,23 @@ partial class Worker
                     blobContainerName = AskBlobContainerName(null, storageAccount);
                 }
             }
+            if (metadataFilePattern is null)
+            {
+                if (Config is not null)
+                {
+                    WriteLine($"Using metadata file pattern {metadataFilePattern} from {ConfigFile?.FullName}");
+                    metadataFilePattern = Config.runStoreMetadataFilePattern;
+                    needConfirmation = true;
+                }
+                else { metadataFilePattern = METADATA_FILE_PATTERN; }
+            }
             var deploymentName = $"exekias_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
             WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
-            if (needConfirmation && Choose("Proceed?", new string[] { "Yes", "No" }, false) != 0)
+            if (needConfirmation && Choose("Proceed?", ["Yes", "No"], false) != 0)
             {
                 return 1;
             }
-            DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName);
+            DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName, metadataFilePattern);
             return 0;
         }
         catch (InvalidOperationException ex)

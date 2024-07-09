@@ -31,10 +31,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="..\..\Version.proj" Link="Version.proj" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Bicep Include="main.bicep" />
 	</ItemGroup>
 	

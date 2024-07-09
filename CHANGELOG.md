@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+
+## [2.3.1] - 2024-07-09
+
+### Fixed
+- in `exekias backend deploy` command, user authorization is now properly set up for the backend.
+
+### Added
+- `--metadatafilepattern` option added to the `exekias backend deploy` command for fine grained control of metadata file pattern.
+
+### Removed
+- obsolete `--interactiveauth` option.
+
+
 ## [2.3.0] - 2024-06-26
 
 ### Added
