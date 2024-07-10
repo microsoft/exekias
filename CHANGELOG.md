@@ -11,9 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.3.1] - 2024-07-09
 
 ### Fixed
-- in `exekias backend deploy` command, user authorization is now properly set up for the backend.
+- In `exekias backend deploy` command, user authorization is now properly set up for the backend.
 - `exekias` diagnostics of non-existant config file.
 - `NullReferenceException` in `FullScan` activity.
+- Redeployment of Azure function require restart of the function app which is now done automatically.
 
 ### Added
 - `--metadatafilepattern` option added to the `exekias backend deploy` command for fine grained control of metadata file pattern.

@@ -5,6 +5,7 @@ using Exekias.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.DurableTask.Client;
+using System.Reflection;
 
 namespace Exekias.AzureFunctions
 {
@@ -98,7 +99,7 @@ namespace Exekias.AzureFunctions
         {
             OrchestrationMetadata? status = null;
             string? command = req.Query["command"];
-            if (null == command || "full".Equals(command, StringComparison.InvariantCultureIgnoreCase))
+            if ("full".Equals(command, StringComparison.InvariantCultureIgnoreCase))
             {
                 await Orchestrator.EnsureStarted(starter, logger, options);
                 await Orchestrator.RaiseFullEventAsync(starter);
@@ -165,7 +166,8 @@ namespace Exekias.AzureFunctions
             status = await starter.GetInstanceAsync(Orchestrator.InstanceId);
             var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
             response.Headers.Add("Content-Type", "text/plain; charset=utf-8");
-            await response.WriteStringAsync($"Status: {status?.RuntimeStatus.ToString() ?? "not started"}");
+            var version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            await response.WriteStringAsync($"version: {version}\nstatus: {status?.RuntimeStatus.ToString() ?? "not started"}");
             return response;
         }
     }

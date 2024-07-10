@@ -176,7 +176,7 @@ partial class Worker
         var packageUrl = funcApp.GetApplicationSettings().Value.Properties["WEBSITE_RUN_FROM_PACKAGE"] ?? throw new NullReferenceException("WEBSITE_RUN_FROM_PACKAGE property not set.");
         var blob = new Azure.Storage.Blobs.BlobClient(new Uri(packageUrl), Credential);
         blob.Upload(zipPath, overwrite: true);
-
+        funcApp.Restart();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         SiteFunctionResource? update = null;
         do
