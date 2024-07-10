@@ -16,7 +16,7 @@ $batch = Get-AzBatchAccountKey -ResourceGroupName $resourceGroup -Name "${storag
 
 Write-Host "[$(Get-Date)] Creating and uploading a sample Run..."
 $sample_folder = "./sample"
-$runid = "$(Get-Date -UFormat "%Y%m%d-%H%M%S")-integration-test"
+$runid = "$(Get-Date -UFormat "%Y%m%d-%H%M%S")_integration-test"
 $upload_relative_path = "$sample_folder/upload/$runid"
 $download_relative_path = "$sample_folder/download"
 if (Test-Path $sample_folder) {

@@ -364,8 +364,8 @@ partial class Worker
             {
                 if (ConfigOrNone is not null)
                 {
-                    WriteLine($"Using blob container name {runStoreContainerName} from {ConfigFile?.FullName}");
                     blobContainerName = runStoreContainerName;
+                    WriteLine($"Using blob container name {blobContainerName} from {ConfigFile?.FullName}");
                     needConfirmation = true;
                 }
                 else if (!storageAccount.GetBlobService().GetBlobContainers().Any())
@@ -381,8 +381,8 @@ partial class Worker
             {
                 if (ConfigOrNone is not null)
                 {
-                    WriteLine($"Using metadata file pattern {metadataFilePattern} from {ConfigFile?.FullName}");
                     metadataFilePattern = ConfigOrNone.runStoreMetadataFilePattern;
+                    WriteLine($"Using metadata file pattern {metadataFilePattern} from {ConfigFile?.FullName}");
                     needConfirmation = true;
                 }
                 else { metadataFilePattern = METADATA_FILE_PATTERN; }
