@@ -31,7 +31,7 @@ partial class Worker
         bool jsonOutput,
         bool isHidden)
     {
-        if (Config == null)
+        if (ConfigDoesNotExist)
         {
             return 1;
         }
@@ -55,7 +55,7 @@ partial class Worker
 
     public async Task<int> DoShow(string runId)
     {
-        if (Config == null)
+        if (ConfigDoesNotExist)
         {
             return 1;
         }
@@ -74,7 +74,7 @@ partial class Worker
 
     public async Task<int> DoHide(string runId, bool unhide)
     {
-        if (Config == null)
+        if (ConfigDoesNotExist)
         {
             return 1;
         }

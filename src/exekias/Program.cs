@@ -1,6 +1,5 @@
 ﻿using System.CommandLine;
 
-
 var rootCommand = new RootCommand("Exekias configuration");
 rootCommand.AddGlobalOption(Context.configOption);
 rootCommand.AddGlobalOption(Context.credentialOption);
@@ -126,14 +125,15 @@ backendAllowCommand.SetHandler(async ctx => ctx.ExitCode = await new Worker(ctx)
 var locationOption = new Option<string>("--location", "Azure location for the resource group.");
 backendDeployCommand.AddOption(locationOption);
 // interactive authentication option
-var interactiveAuthOption = new Option<bool>("--interactiveauth", "Use interactive authentication.");
-backendDeployCommand.AddOption(interactiveAuthOption);
+var metadataFilePatternOption = new Option<string>("--metadatafilepattern", $"Metadata File Path regular expression. The default is {Worker.METADATA_FILE_PATTERN}");
+backendDeployCommand.AddOption(metadataFilePatternOption);
 backendDeployCommand.SetHandler(ctx => new Worker(ctx).DoBackendDeploy(
     ctx.ParseResult.GetValueForOption(azureSubscriptionOption),
     ctx.ParseResult.GetValueForOption(resourceGroupOption),
     ctx.ParseResult.GetValueForOption(locationOption),
     ctx.ParseResult.GetValueForOption(storageAccountOption),
-    ctx.ParseResult.GetValueForOption(blobContainerOption)));
+    ctx.ParseResult.GetValueForOption(blobContainerOption),
+    ctx.ParseResult.GetValueForOption(metadataFilePatternOption)));
 
 // backend batchapp upload <path> <name> <version> -- upload a batch application package.
 var backendBatchAppCommand = new Command("batchapp", "Manage Batch Service applications.");

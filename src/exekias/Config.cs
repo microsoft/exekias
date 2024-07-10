@@ -16,7 +16,9 @@ partial class Worker
 
     public int DoShow()
     {
-        if (Config == null) { return 1; }
+        if (ConfigDoesNotExist) {
+            return 1; 
+        }
         WriteLine($"Configuration file {ConfigFile.FullName}");
         var runStoreResourceId = ResourceIdentifier.Parse(this.runStoreResourceId);
         SubscriptionResource subscription = Arm.GetSubscriptionResource(ResourceIdentifier.Parse(

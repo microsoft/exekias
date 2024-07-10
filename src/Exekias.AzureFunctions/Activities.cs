@@ -94,9 +94,8 @@ namespace Exekias.AzureFunctions
 
         [Function(nameof(FullScan))]
         public async Task<List<RunData>> FullScan(
-            [ActivityTrigger] FunctionContext executionContext)
+            [ActivityTrigger] FunctionContext context)
         {
-            ILogger logger = executionContext.GetLogger(nameof(FullScan));
             logger.LogInformation("Starting full scan of Stores");
             List<RunData> imports = await steps.Compare(logger);
             logger.LogInformation("Finished full scan of Stores, {count} runs to import.", imports.Count);

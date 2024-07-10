@@ -4,7 +4,8 @@ param location string = resourceGroup().location
 
 param runStoreName string
 param storeContainer string
-param metadataFilePattern string = '^(?<runId>(?<timestamp>(?<date>[\\d]+)-(?<time>[\\d]+))-(?<title>[^/]*))/params.json$'
+param metadataFilePattern string
+param deploymentPrincipalId string
 param batchVmSize string = 'Standard_E2_v3'
 
 var syncName = '${take(runStoreName, 19)}8sync'
@@ -361,6 +362,15 @@ resource queueDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinit
 
 resource tableDataContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
   name: '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3' // Storage Table Data Contributor
+}
+
+resource deployerSyncBlobOwnerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: syncStore
+  name: guid(deploymentPrincipalId, syncStore.id, blobDataOwnerRoleDefinition.id)
+  properties: {
+    principalId: deploymentPrincipalId
+    roleDefinitionId: blobDataOwnerRoleDefinition.id
+  }
 }
 
 resource functionSyncBlobOwnerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {

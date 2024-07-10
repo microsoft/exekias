@@ -61,7 +61,12 @@ partial class Worker
         return result;
     }
 
-    public void DeployComponents(ResourceGroupResource resourceGroup, StorageAccountResource runStore, string containerName, string deploymentName)
+    public void DeployComponents(
+        ResourceGroupResource resourceGroup,
+        StorageAccountResource runStore,
+        string containerName,
+        string deploymentName,
+        string metadataFilePattern)
     {
         //
         // Assumes the directory contains packages 'sync.zip', 'fetch.zip' and 'tables.zip'.
@@ -69,8 +74,7 @@ partial class Worker
         // and then zipping the contents of the 'bin/Debug/net6.0/publish' directory.
         // See `exekiascmd.ps1` script.
         //
-        var basePath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location);
-        if (basePath is null) { throw new InvalidOperationException("Cannot determine application base path"); }
+        var basePath = Path.GetDirectoryName(Assembly.GetEntryAssembly()?.Location) ?? throw new InvalidOperationException("Cannot determine application base path");
         var templatePath = Path.Combine(basePath, "main.json");
         var syncPackagePath = Path.Combine(basePath, "Exekias.AzureFunctions.zip");
         var tablesPath = Path.Combine(basePath, "Exekias.DataImport.zip");
@@ -85,6 +89,21 @@ partial class Worker
             AllowBlobPublicAccess = false,
             AllowSharedKeyAccess = false
         });
+        // Get the principal id of the current user
+        var token = Credential.GetToken(new TokenRequestContext(["https://management.azure.com/.default"]), CancellationToken.None);
+        string base64Payload = token.Token.Split('.')[1];
+        var paddingLength = (4 - base64Payload.Length % 4) % 4;
+        var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
+        var tokenClaims = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement;
+        var principalId = tokenClaims.GetProperty("oid").GetGuid();
+        var principalName = "";
+        try
+        {
+            principalName = tokenClaims.GetProperty("upn").GetString();
+        }
+        catch (Exception) { }
+        WriteLine($"Using credential for {principalName} {principalId}");
+
         // Deploy ARM resources using template file
         ArmDeploymentResource deployment;
         try
@@ -98,7 +117,9 @@ partial class Worker
                         Parameters = BinaryData.FromObjectAsJson(new JsonObject() {
                         {"location", new JsonObject(){ { "value", runStore.Data.Location.Name } } },
                         {"runStoreName", new JsonObject(){ {"value", runStore.Data.Name } } },
-                        {"storeContainer", new JsonObject(){ {"value", containerName } } }
+                        {"storeContainer", new JsonObject(){ {"value", containerName } } },
+                        {"metadataFilePattern", new JsonObject(){ {"value", metadataFilePattern } } },
+                        {"deploymentPrincipalId", new JsonObject(){ {"value", principalId.ToString() } } }
                         })
                     })).Value;
         }
@@ -106,7 +127,7 @@ partial class Worker
         {
             throw new InvalidOperationException($"Deployment failed: {err.Message}");
         }
-        WriteLine("Deployment completed. The following resource have been created or updated:");
+        WriteLine("The following resource have been created or updated:");
         foreach (var subResource in deployment.Data.Properties.OutputResources)
         {
             if (subResource is not null)
@@ -121,9 +142,13 @@ partial class Worker
         var batchPoolId = deploymentOutput["batchPoolId"]?["value"]?.GetValue<string?>();
         var metaStoreId = deploymentOutput["metaStoreId"]?["value"]?.GetValue<string?>();
 
+        // authorize the user to access the backend services
+        CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
+        WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
+        AuthorizeCredentials(runStore, metaStore, syncFunction, principalId);
+
         // deploy syncFunction code from sync.zip
         var runChangeEventSink = "RunChangeEventSink";
-        WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
         // the deployment created a new function app. Deploy code from a package.
         syncFunction = DeployFunctionCode(syncFunction, syncPackagePath, runChangeEventSink);
         WriteLine($"Deployed package {Path.GetFileName(syncPackagePath)} to Function app {syncFunction.Id.Name}");
@@ -144,14 +169,6 @@ partial class Worker
         WriteLine("Adding application package to batch account.");
         PoolAssignApplication(batchPoolId!,
             UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0"));
-
-        var token = Credential.GetToken(new TokenRequestContext(new[] { "https://management.azure.com/.default" }), CancellationToken.None);
-        string base64Payload = token.Token.Split('.')[1];
-        var paddingLength = (4 - base64Payload.Length % 4) % 4;
-        var jsonPayload = Convert.FromBase64String(base64Payload + new string('=', paddingLength));
-        var principalId = System.Text.Json.JsonDocument.Parse(jsonPayload).RootElement.GetProperty("oid").GetGuid();
-        CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
-        AuthorizeCredentials(runStore, metaStore, principalId);
     }
 
     WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath, string expected)
@@ -159,7 +176,7 @@ partial class Worker
         var packageUrl = funcApp.GetApplicationSettings().Value.Properties["WEBSITE_RUN_FROM_PACKAGE"] ?? throw new NullReferenceException("WEBSITE_RUN_FROM_PACKAGE property not set.");
         var blob = new Azure.Storage.Blobs.BlobClient(new Uri(packageUrl), Credential);
         blob.Upload(zipPath, overwrite: true);
-
+        funcApp.Restart();
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         SiteFunctionResource? update = null;
         do
@@ -202,6 +219,7 @@ partial class Worker
     void AuthorizeCredentials(
         StorageAccountResource data,
         CosmosDBAccountResource meta,
+        WebSiteResource functionApp,
         Guid principalId)
     {
         var blobRole = "Storage Blob Data Contributor";
@@ -215,7 +233,7 @@ partial class Worker
             data.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
                 roleDefinitionId: blobDataContributorRole.Id,
                 principalId: principalId));
-            WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description} role.");
+            WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description}.");
         }
 
         var cosmosRole = "Cosmos DB Built-in Data Contributor";
@@ -234,14 +252,28 @@ partial class Worker
             });
             WriteLine($"Authorized {principalId} to access Cosmos DB account {meta.Id.Name} as {cosmosRole}.");
         }
+
+        var functionRole = "Website Contributor";
+        var functionWebsiteContributorRole = functionApp
+            .GetAuthorizationRoleDefinitions()
+            .GetAll()
+            .FirstOrDefault(r => r.Data.RoleName == functionRole)
+            ?.Data ?? throw new InvalidOperationException($"Cannot find {functionRole} role definition.");
+        if (functionApp.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != functionWebsiteContributorRole.Id))
+        {
+            functionApp.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
+                roleDefinitionId: functionWebsiteContributorRole.Id,
+                principalId: principalId));
+            WriteLine($"Authorized {principalId} to access Function app {functionApp.Id.Name}: {functionWebsiteContributorRole.Description}");
+        }
     }
 
     async Task<(Guid principalId, string principalName)> GetPrincipal(string principalId)
     {
-        static (Guid principalId, string principalName) returnUser(Entra.User user) => 
+        static (Guid principalId, string principalName) returnUser(Entra.User user) =>
             (new Guid(user.Id!), $"user {user.DisplayName} {user.Mail}");
 
-        static (Guid principalId, string principalName) returnGroup(Entra.Group group) => 
+        static (Guid principalId, string principalName) returnGroup(Entra.Group group) =>
             (new Guid(group.Id!), $"group {group.DisplayName}");
 
         var graphClient = new Microsoft.Graph.GraphServiceClient(Credential);
@@ -276,15 +308,15 @@ partial class Worker
                 await Task.WhenAll(userTask1, userTask2, groupTask);
             }
             catch (Entra.ODataErrors.ODataError) { }
-            if (userTask1.IsCompletedSuccessfully && userTask1.Result?.Value is not null && userTask1.Result.Value.Count==1)
+            if (userTask1.IsCompletedSuccessfully && userTask1.Result?.Value is not null && userTask1.Result.Value.Count == 1)
             {
                 return returnUser(userTask1.Result.Value[0]);
             }
-            if (userTask2.IsCompletedSuccessfully && userTask2.Result?.Value is not null && userTask2.Result.Value.Count==1)
+            if (userTask2.IsCompletedSuccessfully && userTask2.Result?.Value is not null && userTask2.Result.Value.Count == 1)
             {
                 return returnUser(userTask2.Result.Value[0]);
             }
-            if (groupTask.IsCompletedSuccessfully && groupTask.Result?.Value is not null && groupTask.Result.Value.Count==1)
+            if (groupTask.IsCompletedSuccessfully && groupTask.Result?.Value is not null && groupTask.Result.Value.Count == 1)
             {
                 return returnGroup(groupTask.Result.Value[0]);
             }
@@ -292,12 +324,15 @@ partial class Worker
         throw new InvalidOperationException($"Cannot find user or group with id or mail '{principalId}'.");
     }
 
+    public const string METADATA_FILE_PATTERN = @"^(?<runId>(?<timestamp>(?<date>[\d]+)-(?<time>[\d]+))-(?<title>[^/]*))/params.json$";
+
     public int DoBackendDeploy(
         string? subscription,
         string? resourceGroupName,
         string? location,
         string? storageAccountName,
-        string? blobContainerName)
+        string? blobContainerName,
+        string? metadataFilePattern)
     {
         try
         {
@@ -312,7 +347,7 @@ partial class Worker
 
             bool needConfirmation = false;
             SubscriptionResource subscriptionResource;
-            if (subscription is null && Config is not null)
+            if (subscription is null && ConfigOrNone is not null)
             {
                 subscriptionResource = runStoreSubscription.Value;
                 WriteLine($"Using subscription {subscriptionResource.Data.DisplayName} from {ConfigFile?.FullName}");
@@ -325,7 +360,7 @@ partial class Worker
 
             if (!SubscriptionHasRequiredProviders(subscriptionResource)) { return 1; }
 
-            if (resourceGroupName is null && Config is not null)
+            if (resourceGroupName is null && ConfigOrNone is not null)
             {
                 resourceGroupName = runStoreResource.Value.Data.Id.ResourceGroupName;
                 WriteLine($"Using resource group name {resourceGroupName} from {ConfigFile?.FullName}");
@@ -333,22 +368,22 @@ partial class Worker
             }
             var resourceGroup = AskResourceGroup(resourceGroupName, subscriptionResource, true, location);
 
-            if (storageAccountName is null && Config is not null)
+            if (storageAccountName is null && ConfigOrNone is not null)
             {
                 storageAccountName = runStoreResource.Value.Data.Name;
                 WriteLine($"Using storage account name {storageAccountName} from {ConfigFile?.FullName}");
                 needConfirmation = true;
             }
             var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, true);
-            if (blobContainerName == null)
+            if (blobContainerName is null)
             {
-                if (Config is not null)
+                if (ConfigOrNone is not null)
                 {
-                    WriteLine($"Using blob container name {runStoreContainerName} from {ConfigFile?.FullName}");
                     blobContainerName = runStoreContainerName;
+                    WriteLine($"Using blob container name {blobContainerName} from {ConfigFile?.FullName}");
                     needConfirmation = true;
                 }
-                else if (storageAccount.GetBlobService().GetBlobContainers().Count() == 0)
+                else if (!storageAccount.GetBlobService().GetBlobContainers().Any())
                 {
                     blobContainerName = "runs";
                 }
@@ -357,13 +392,23 @@ partial class Worker
                     blobContainerName = AskBlobContainerName(null, storageAccount);
                 }
             }
+            if (metadataFilePattern is null)
+            {
+                if (ConfigOrNone is not null)
+                {
+                    metadataFilePattern = ConfigOrNone.runStoreMetadataFilePattern;
+                    WriteLine($"Using metadata file pattern {metadataFilePattern} from {ConfigFile?.FullName}");
+                    needConfirmation = true;
+                }
+                else { metadataFilePattern = METADATA_FILE_PATTERN; }
+            }
             var deploymentName = $"exekias_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
             WriteLine($"Start deployment {deploymentName} of backend services for {storageAccount.Id.Name}/{blobContainerName} in {subscriptionResource.Data.DisplayName}.");
-            if (needConfirmation && Choose("Proceed?", new string[] { "Yes", "No" }, false) != 0)
+            if (needConfirmation && Choose("Proceed?", ["Yes", "No"], false) != 0)
             {
                 return 1;
             }
-            DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName);
+            DeployComponents(resourceGroup, storageAccount, blobContainerName, deploymentName, metadataFilePattern);
             return 0;
         }
         catch (InvalidOperationException ex)
@@ -391,14 +436,24 @@ partial class Worker
 
     public async Task<int> DoBackendAllow(string principalId)
     {
+        if (ConfigDoesNotExist) { return 1; }
         try
         {
             (var principalGuid, var principalName) = await GetPrincipal(principalId);
             WriteLine($"Authorizing {principalName} to access backend services.");
-            var runStoreResourceTask = Arm.GetStorageAccountResource(new ResourceIdentifier(runStoreResourceId)).GetAsync();
-            var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(exekiasStoreResourceId)).GetAsync();
-            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask);
-            AuthorizeCredentials(runStoreResourceTask.Result.Value, metaStoreResourceTask.Result.Value, principalGuid);
+            var runStoreRid = ResourceIdentifier.Parse(runStoreResourceId);
+            var runStoreResourceTask = Arm.GetStorageAccountResource(runStoreRid).GetAsync();
+            var exekiasStoreRid = ResourceIdentifier.Parse(exekiasStoreResourceId);
+            var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(exekiasStoreRid).GetAsync();
+            var functionRid = ResourceIdentifier.Parse(string.Format(
+                "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Web/sites/{2}-{3}",
+                exekiasStoreRid.SubscriptionId,
+                exekiasStoreRid.ResourceGroupName,
+                exekiasStoreRid.Name,
+                runStoreContainerName));
+            var functionResourceTask = Arm.GetWebSiteResource(functionRid).GetAsync();
+            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask, functionResourceTask);
+            AuthorizeCredentials(runStoreResourceTask.Result.Value, metaStoreResourceTask.Result.Value, functionResourceTask.Result.Value, principalGuid);
             return 0;
         }
         catch (Exception ex)

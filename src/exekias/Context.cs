@@ -173,9 +173,21 @@ public class Context(InvocationContext cmdContext)
         return new ProgressIndicator(cmdContext.Console);
     }
 
-    public ExekiasConfig? Config => GetConfig();
+    public ExekiasConfig Config => GetConfig() ?? throw new ArgumentNullException("No configuration file found.");
+    public ExekiasConfig? ConfigOrNone => GetConfig();
     public FileInfo ConfigFile => GetConfigFile();
-
+    public bool ConfigDoesNotExist
+    {
+        get
+        {
+            if (Config is null)
+            {
+                WriteError("No configuration file found.");
+                return true;
+            }
+            return false;
+        }
+    }
 }
 
 public partial class Worker : Context
