@@ -146,7 +146,7 @@ jobs:
         uses: azure/powershell@v2
         with:
             inlineScript: |
-              ./canary-test.ps1 ${{ env.EXEKIAS_RESOURCEGROUP }} ${{ env.EXEKIAS_STORAGEACCOUNT }} "src/exekias/bin/Release/net8.0/publish/${{ env.BIN_NAME }}"
+              ./integration-test.ps1 ${{ env.EXEKIAS_RESOURCEGROUP }} ${{ env.EXEKIAS_STORAGEACCOUNT }} "src/exekias/bin/Release/net8.0/publish/${{ env.BIN_NAME }}"
             azPSVersion: "latest"
           
       - name: Clean up deployment
