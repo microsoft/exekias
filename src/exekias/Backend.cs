@@ -144,11 +144,11 @@ partial class Worker
 
         // authorize the user to access the backend services
         CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
-        AuthorizeCredentials(runStore, metaStore, principalId);
+        WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
+        AuthorizeCredentials(runStore, metaStore, syncFunction, principalId);
 
         // deploy syncFunction code from sync.zip
         var runChangeEventSink = "RunChangeEventSink";
-        WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
         // the deployment created a new function app. Deploy code from a package.
         syncFunction = DeployFunctionCode(syncFunction, syncPackagePath, runChangeEventSink);
         WriteLine($"Deployed package {Path.GetFileName(syncPackagePath)} to Function app {syncFunction.Id.Name}");
@@ -219,6 +219,7 @@ partial class Worker
     void AuthorizeCredentials(
         StorageAccountResource data,
         CosmosDBAccountResource meta,
+        WebSiteResource functionApp,
         Guid principalId)
     {
         var blobRole = "Storage Blob Data Contributor";
@@ -232,7 +233,7 @@ partial class Worker
             data.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
                 roleDefinitionId: blobDataContributorRole.Id,
                 principalId: principalId));
-            WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description} role.");
+            WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description}.");
         }
 
         var cosmosRole = "Cosmos DB Built-in Data Contributor";
@@ -250,6 +251,20 @@ partial class Worker
                 Scope = meta.Id
             });
             WriteLine($"Authorized {principalId} to access Cosmos DB account {meta.Id.Name} as {cosmosRole}.");
+        }
+
+        var functionRole = "Website Contributor";
+        var functionWebsiteContributorRole = functionApp
+            .GetAuthorizationRoleDefinitions()
+            .GetAll()
+            .FirstOrDefault(r => r.Data.RoleName == functionRole)
+            ?.Data ?? throw new InvalidOperationException($"Cannot find {functionRole} role definition.");
+        if (functionApp.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != functionWebsiteContributorRole.Id))
+        {
+            functionApp.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
+                roleDefinitionId: functionWebsiteContributorRole.Id,
+                principalId: principalId));
+            WriteLine($"Authorized {principalId} to access Function app {functionApp.Id.Name}: {functionWebsiteContributorRole.Description}");
         }
     }
 
@@ -426,10 +441,19 @@ partial class Worker
         {
             (var principalGuid, var principalName) = await GetPrincipal(principalId);
             WriteLine($"Authorizing {principalName} to access backend services.");
-            var runStoreResourceTask = Arm.GetStorageAccountResource(new ResourceIdentifier(runStoreResourceId)).GetAsync();
-            var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(exekiasStoreResourceId)).GetAsync();
-            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask);
-            AuthorizeCredentials(runStoreResourceTask.Result.Value, metaStoreResourceTask.Result.Value, principalGuid);
+            var runStoreRid = ResourceIdentifier.Parse(runStoreResourceId);
+            var runStoreResourceTask = Arm.GetStorageAccountResource(runStoreRid).GetAsync();
+            var exekiasStoreRid = ResourceIdentifier.Parse(exekiasStoreResourceId);
+            var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(exekiasStoreRid).GetAsync();
+            var functionRid = ResourceIdentifier.Parse(string.Format(
+                "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Web/sites/{2}-{3}",
+                exekiasStoreRid.SubscriptionId,
+                exekiasStoreRid.ResourceGroupName,
+                exekiasStoreRid.Name,
+                runStoreContainerName));
+            var functionResourceTask = Arm.GetWebSiteResource(functionRid).GetAsync();
+            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask, functionResourceTask);
+            AuthorizeCredentials(runStoreResourceTask.Result.Value, metaStoreResourceTask.Result.Value, functionResourceTask.Result.Value, principalGuid);
             return 0;
         }
         catch (Exception ex)

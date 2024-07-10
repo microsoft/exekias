@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
-## [2.3.1] - 2024-07-09
+## [2.3.1] - 2024-07-10
 
 ### Fixed
 - In `exekias backend deploy` command, user authorization is now properly set up for the backend.
@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `--metadatafilepattern` option added to the `exekias backend deploy` command for fine grained control of metadata file pattern.
+- `exekias backend allow` command adds Website Contributor role.
 
 ### Removed
 - obsolete `--interactiveauth` option.
