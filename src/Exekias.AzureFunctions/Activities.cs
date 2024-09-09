@@ -37,7 +37,7 @@ namespace Exekias.AzureFunctions
 
         [Function(nameof(UpdateRun))]
         public async Task UpdateRun(
-            [ActivityTrigger]  RunData runData)
+            [ActivityTrigger] RunData runData)
         {
             if (null == runData)
             {
@@ -93,8 +93,7 @@ namespace Exekias.AzureFunctions
             => context.CallActivityAsync(nameof(UpdateRun), run);
 
         [Function(nameof(FullScan))]
-        public async Task<List<RunData>> FullScan(
-            [ActivityTrigger] FunctionContext context)
+        public async Task<List<RunData>> FullScan()
         {
             logger.LogInformation("Starting full scan of Stores");
             List<RunData> imports = await steps.Compare(logger);
