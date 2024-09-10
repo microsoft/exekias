@@ -73,6 +73,28 @@ You will need to have Contributor role in an Azure subscription.
 The interactive command may create and connect metadata services to an existing blob container or create a new blob container for you.
 
 # Development on Linux
+## Setting up development environment
+
+### GitHub Codespaces
+
+The [GitHub codespace](https://github.com/features/codespaces) created from the repository has all the necessary tools set up.
+
+### Visual Studio Code DevContainer
+
+- Set up [Visual Studio Code with Dev Containers](https://code.visualstudio.com/docs/devcontainers/containers) as described in the documentation.
+- Start VS Code and run "Dev Containers: Clone Repository in Container Volume..." from the Command Palette.
+- Enter `microsoft/exekias` as a GitURI.
+
+The container will have all the necessary tools installed.
+
+See [Open a Git repository or GitHub PR in an isolated container volume](https://code.visualstudio.com/docs/devcontainers/containers#_quick-start-open-a-git-repository-or-github-pr-in-an-isolated-container-volume) for details.
+
+### Bare system
+
+- `dotnet` version 6 or above.
+- `PowerShell` with module `Az`.
+- `azurite`.
+
 ## Running tests
 - Install `netcdf`. On Ubuntu, package name is `libnetcdf-dev`. 
 - Install azurite, Azure Storage emulator, https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#install-azurite
@@ -114,7 +136,7 @@ The interactive command may create and connect metadata services to an existing 
   ```
 - Login to Azure with your account
   ```pwsh
-  Login-AzAccount
+  Connect-AzAccount -UseDeviceAuthentication
   ```
 - Set environment variables to a proper resource group and storage account names
   ```pwsh
@@ -127,5 +149,5 @@ The interactive command may create and connect metadata services to an existing 
 - Clean up the resource group and start the canary test
   ```pwsh
   .\cleanup_resource_group.ps1 $env:EXEKIAS_SUBSCRIPTION $env:EXEKIAS_RESOURCEGROUP
-  .\exekias-canary-test.ps1
+  .\exekias-canary-test.ps1 $env:EXEKIAS_RESOURCEGROUP $env:EXEKIAS_STORAGEACCOUNT $env:EXEKIAS_BIN
   ```
