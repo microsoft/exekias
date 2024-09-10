@@ -125,16 +125,18 @@ See [Open a Git repository or GitHub PR in an isolated container volume](https:/
         ./src/exekias/bin/Release/net6.0/publish/exekias -h
 
 
-## Running canary script on Linux
+## Running canary script
 
 - Login to Azure with your account
   ```
   pwsh -c Connect-AzAccount -UseDeviceAuthentication
   ```
 
-- Deploy backend instance. You will need owner role in the resource group for the deployment to succeed.
+- Deploy backend instance and create configuration file.
+  You will need owner role in the resource group for the deployment to succeed.
   ```
   ./src/exekias/bin/Release/net8.0/publish/exekias backend deploy
+  ./src/exekias/bin/Release/net8.0/publish/exekias config create
   ```
 
 - Start the canary test
