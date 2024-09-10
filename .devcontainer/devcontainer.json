@@ -1,10 +1,28 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/universal
 {
-	"image": "mcr.microsoft.com/devcontainers/universal:2",
+	"name": "Default Linux Universal",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
-		"ghcr.io/rchaganti/vsc-devcontainer-features/azurebicep:1": {},
-		"ghcr.io/devcontainers/features/azure-cli:1": {}
+		"ghcr.io/devcontainers/features/powershell:1": {},
+		"ghcr.io/rchaganti/vsc-devcontainer-features/azurebicep:1": {}
 	},
 	"containerEnv": {
-		"BicepPath": "/usr/local/bin/bicep"
-	}
+		"BicepPath": "/usr/local/bin/bicep",
+		"URL_7Z": "https://www.7-zip.org/a/7z2408-linux-x64.tar.xz",
+		"URL_NetCDF": "https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netCDF4.9.2-NC4-64.exe"
+	},
+	"remoteEnv": {
+		"LIBNETCDFPATH": "/home/codespace/netcdf/bin/netcdf.dll"
+	},
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "sh .devcontainer/postCreate.sh"
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+	// Configure tool-specific properties.
+	// "customizations": {},
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
 }
