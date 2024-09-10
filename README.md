@@ -91,13 +91,18 @@ See [Open a Git repository or GitHub PR in an isolated container volume](https:/
 
 ### Bare system
 
-- `dotnet` version 6 or above.
-- `PowerShell` with module `Az`.
-- `azurite`.
+- Install `dotnet` https://dotnet.microsoft.com SDK 6.0 or later.
+- Install `bicep` https://aka.ms/bicep CLI.
+- Set `BicepPath` environment variable to point to the `bicep` executable
+- Install `PowerShell` https://aka.ms/powershell with module `Az`.
+- Install azurite, Azure Storage emulator, https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#install-azurite
+- Install `NetCDF`https://www.unidata.ucar.edu/software/netcdf/. On Ubuntu, package name is `libnetcdf-dev`.
+- Copy netCDF Windows .dll files and set LIBNETCDFPATH environment variable to the path of `netcdf.dll`.
+    - On Windows, download and install latest Windows netCDF NC4 x64 installer package from https://docs.unidata.ucar.edu/netcdf-c/current/winbin.html
+    - Compress all the `.dll` files, e.g. `Compress-Archive "C:\Program Files\netCDF 4.9.2\bin\*.dll" netcdf-win.zip`
+    - Copy the archive to the Linux machine and decompress it, e.g `mkdir -p ~/netcdf/bin && unzip netcdf-win.zip -d ~/netcdf/bin`
 
 ## Running tests
-- Install `netcdf`. On Ubuntu, package name is `libnetcdf-dev`. 
-- Install azurite, Azure Storage emulator, https://learn.microsoft.com/en-us/azure/storage/common/storage-use-azurite#install-azurite
 - Run azurite, preferably in a separate terminal
 
         cd ~/azurite
@@ -111,43 +116,28 @@ See [Open a Git repository or GitHub PR in an isolated container volume](https:/
 
 ## Build command line utility on Linux
 
-- Install dotnet SDK 6.0 or later, https://dotnet.microsoft.com/en-us/download/dotnet.
-- Install bicep CLI, https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/install#linux.
-- Set BicepPath environment variable to point to the bicep executable, e.g. `/usr/local/bin/bicep`
-- Copy netCDF Windows .dll files and set LIBNETCDFPATH environment variable to the path of `netcdf.dll`.
-    - On Windows, download and install latest Windows netCDF NC4 x64 installer package from https://docs.unidata.ucar.edu/netcdf-c/current/winbin.html
-    - Compress all the `.dll` files, e.g. `Compress-Archive "C:\Program Files\netCDF 4.9.2\bin\*.dll" netcdf-win.zip`
-    - Copy the archive to the Linux machine and decompress it, e.g `mkdir -p ~/netcdf/bin && unzip netcdf-win.zip -d ~/netcdf/bin`
 - Run the `dotnet publish` command, e.g.
 
-        BicepPath=/usr/local/bin/bicep LIBNETCDFPATH=~/netcdf/bin/netcdf.dll dotnet publish -c release src/exekias
+        dotnet publish src/exekias
 
 - Test the command is running
 
-        ./src/exekias/bin/release/net6.0/publish/exekias -h
+        ./src/exekias/bin/Release/net6.0/publish/exekias -h
 
 
 ## Running canary script on Linux
 
-- Install PowerShell, https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell.
-- Install Azure PowerShell
-  ```pwsh
-  Install-Module az
-  ```
 - Login to Azure with your account
-  ```pwsh
-  Connect-AzAccount -UseDeviceAuthentication
   ```
-- Set environment variables to a proper resource group and storage account names
-  ```pwsh
-  $env:EXEKIAS_SUBSCRIPTION="<subscription>"
-  $env:EXEKIAS_RESOURCEGROUP="exekias-canary-github-linux"
-  $env:EXEKIAS_STORAGEACCOUNT="exekiascanaryghl"
-  $env:EXEKIAS_BIN="./src/exekias/bin/release/net6.0/publish/exekias"
+  pwsh -c Connect-AzAccount -UseDeviceAuthentication
   ```
-  You will need owner role in the resource group for the deployment to succeed.
-- Clean up the resource group and start the canary test
+
+- Deploy backend instance. You will need owner role in the resource group for the deployment to succeed.
+  ```
+  ./src/exekias/bin/Release/net8.0/publish/exekias backend deploy
+  ```
+
+- Start the canary test
   ```pwsh
-  .\cleanup_resource_group.ps1 $env:EXEKIAS_SUBSCRIPTION $env:EXEKIAS_RESOURCEGROUP
-  .\exekias-canary-test.ps1 $env:EXEKIAS_RESOURCEGROUP $env:EXEKIAS_STORAGEACCOUNT $env:EXEKIAS_BIN
+  .\integration-test.ps1 <resource_group> <storage_account_name> ./src/exekias/bin/Release/net8.0/publish/exekias
   ```

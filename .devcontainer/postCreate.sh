@@ -9,5 +9,10 @@ echo Downloading NetCDF
 wget -q -O netcdf.exe $URL_NetCDF
 7zip/7zz x netcdf.exe bin/*.dll -onetcdf -y -bso0
 rm netcdf.exe
-echo Downloading PowerShell Az Module
-pwsh -c "Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted; Install-Module -Name Az"
+echo Downloading required PowerShell Az modules
+pwsh -c "Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted; Install-Module -Name Az.Resources,Az.Storage,Az.CosmosDb,Az.Batch"
+echo Install Azurite
+npm install -g azurite
+mkdir ~/azurite
+echo install netcdf
+sudo sudo apt-get update && sudo apt-get install -y libnetcdf-dev
