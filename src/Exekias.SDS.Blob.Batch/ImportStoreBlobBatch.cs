@@ -12,6 +12,8 @@ using System.Linq;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Immutable;
 using Azure.Core;
+using Microsoft.Azure.Batch.Auth;
+using System.Threading;
 
 namespace Exekias.SDS.Blob.Batch
 {
@@ -21,6 +23,7 @@ namespace Exekias.SDS.Blob.Batch
         readonly BatchProcessingOptions options;
         readonly IEnumerable<KeyValuePair<string, string>> jobEnvironment;
 
+        static TokenRequestContext batchTokenContext = new TokenRequestContext(new string[] { "https://batch.core.windows.net/.default" });
         public ImportStoreBlobBatch(
             IOptions<Options> configurationOptions,
             IOptions<BatchProcessingOptions> batchProcessingOptions,
@@ -41,10 +44,10 @@ namespace Exekias.SDS.Blob.Batch
             // We accept both variants for Options.Endpoint configuration value.
             var endpoint = options.Endpoint.IndexOf(":") < 0 ? "https://" + options.Endpoint : options.Endpoint;
             batchClient = BatchClient.Open(
-                new Microsoft.Azure.Batch.Auth.BatchSharedKeyCredentials(
+                new BatchTokenCredentials(
                     endpoint,
-                    options.Name,
-                    options.AccessKey));
+                    async () => (await credentialProvider.GetCredential().GetTokenAsync(batchTokenContext, CancellationToken.None)).Token
+            ));
             const string AppInsightsKey = "APPLICATIONINSIGHTS_CONNECTION_STRING";
             const string PoolIdentityKey = "POOL_MANAGED_IDENTITY";
             const string ManagedIdentityKey = "USER_ASSIGNED_MANAGED_IDENTITY";

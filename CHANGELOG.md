@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Fixed
 - In `exekias backend deploy` command, restart of function app after ARM deployment is now synchronous
   in an attempt to avoid utility hang at the function code deployment stage.
-
+- Backend uses EntraID identity and RBAC to access Batch account.
 
 ## [2.3.1] - 2024-07-10
 

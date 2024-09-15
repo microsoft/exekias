@@ -8,9 +8,7 @@
     /// <param name="AccessKey">Shared access key.</param>
     public class BatchProcessingOptions
     {
-        public string? Name { get; set; }
         public string? Endpoint { get; set; }
-        public string? AccessKey { get; set; }
         public string PoolId { get; set; } = "exekias";
         public string AppPackageId { get; set; } = "dataimport";
         public string AppPackageVersion { get; set; } = "1.0.0";

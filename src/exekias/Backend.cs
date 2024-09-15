@@ -145,7 +145,8 @@ partial class Worker
         // authorize the user to access the backend services
         CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
         WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
-        AuthorizeCredentials(runStore, metaStore, syncFunction, principalId);
+        BatchAccountResource batchAccount = Arm.GetBatchAccountResource(new ResourceIdentifier(batchAccountId!));
+        AuthorizeCredentials(runStore, metaStore, syncFunction, batchAccount, principalId);
 
         // deploy syncFunction code from sync.zip
         var runChangeEventSink = "RunChangeEventSink";
@@ -220,6 +221,7 @@ partial class Worker
         StorageAccountResource data,
         CosmosDBAccountResource meta,
         WebSiteResource functionApp,
+        BatchAccountResource batch,
         Guid principalId)
     {
         var blobRole = "Storage Blob Data Contributor";
@@ -265,6 +267,20 @@ partial class Worker
                 roleDefinitionId: functionWebsiteContributorRole.Id,
                 principalId: principalId));
             WriteLine($"Authorized {principalId} to access Function app {functionApp.Id.Name}: {functionWebsiteContributorRole.Description}");
+        }
+
+        var batchRoleName = "Contributor";
+        var batchRole = batch
+            .GetAuthorizationRoleDefinitions()
+            .GetAll()
+            .FirstOrDefault(r => r.Data.RoleName == batchRoleName)
+            ?.Data ?? throw new InvalidOperationException($"Cannot find {batchRoleName} role definition.");
+        if (batch.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != batchRole.Id))
+        {
+            batch.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
+                roleDefinitionId: batchRole.Id,
+                principalId: principalId));
+            WriteLine($"Authorized {principalId} to access Batch account {batch.Id.Name} as {batchRoleName}: {batchRole.Description}.");
         }
     }
 
@@ -452,8 +468,14 @@ partial class Worker
                 exekiasStoreRid.Name,
                 runStoreContainerName));
             var functionResourceTask = Arm.GetWebSiteResource(functionRid).GetAsync();
-            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask, functionResourceTask);
-            AuthorizeCredentials(runStoreResourceTask.Result.Value, metaStoreResourceTask.Result.Value, functionResourceTask.Result.Value, principalGuid);
+            var batchRid = ResourceIdentifier.Parse(string.Format(
+                "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Batch/batchAccounts/{2}",
+                exekiasStoreRid.SubscriptionId,
+                exekiasStoreRid.ResourceGroupName,
+                exekiasStoreRid.Name));
+            var batchResourceTask = Arm.GetBatchAccountResource(batchRid).GetAsync();
+            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask, functionResourceTask, batchResourceTask);
+            AuthorizeCredentials(runStoreResourceTask.Result.Value, metaStoreResourceTask.Result.Value, functionResourceTask.Result.Value, batchResourceTask.Result.Value, principalGuid);
             return 0;
         }
         catch (Exception ex)
