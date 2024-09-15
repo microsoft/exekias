@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [2.3.2]
+
+## Fixed
+- In `exekias backend deploy` command, restart of function app after ARM deployment is now synchronous
+  in an attempt to avoid utility hang at the function code deployment stage.
 
 
 ## [2.3.1] - 2024-07-10
