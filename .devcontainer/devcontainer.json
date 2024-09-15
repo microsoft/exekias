@@ -6,8 +6,13 @@
 	"image": "mcr.microsoft.com/devcontainers/universal:2-linux",
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
-		"ghcr.io/devcontainers/features/powershell:1": {},
-		"ghcr.io/rchaganti/vsc-devcontainer-features/azurebicep:1": {}
+		"ghcr.io/devcontainers/features/powershell:1": {
+			"version": "latest"
+		},
+		"ghcr.io/rchaganti/vsc-devcontainer-features/azurebicep:1": {},
+		"ghcr.io/devcontainers/features/dotnet:2": {
+			"version": "6.0"
+		}
 	},
 	"containerEnv": {
 		"BicepPath": "/usr/local/bin/bicep",

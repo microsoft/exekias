@@ -296,16 +296,8 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
           value: logStore.properties.ConnectionString
         }
         {
-          name: 'Batch__AccessKey'
-          value: batchAccount.listKeys().primary
-        }
-        {
           name: 'Batch__Endpoint'
           value: batchAccount.properties.accountEndpoint
-        }
-        {
-          name: 'Batch__Name'
-          value: batchAccount.name
         }
         {
           name: 'Batch__VmSize'
@@ -342,6 +334,10 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
       ]
     }
   }
+}
+
+resource ContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  name: 'b24988ac-6180-42a0-ab88-20f7382dd24c'
 }
 
 resource blobDataReaderRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
@@ -410,6 +406,16 @@ resource functionRunDataReaderRoleAssignment 'Microsoft.Authorization/roleAssign
     principalId: syncApp.identity.principalId
     principalType: 'ServicePrincipal' // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
     roleDefinitionId: blobDataReaderRoleDefinition.id
+  }
+}
+
+resource functionBatchContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: batchAccount
+  name: guid(syncApp.id, batchAccount.id, ContributorRoleDefinition.id)
+  properties: {
+    principalId: syncApp.identity.principalId
+    principalType: 'ServicePrincipal' // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
+    roleDefinitionId: ContributorRoleDefinition.id
   }
 }
 
