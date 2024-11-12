@@ -16,8 +16,9 @@ partial class Worker
 
     public int DoShow()
     {
-        if (ConfigDoesNotExist) {
-            return 1; 
+        if (ConfigDoesNotExist)
+        {
+            return 1;
         }
         WriteLine($"Configuration file {ConfigFile.FullName}");
         var runStoreResourceId = ResourceIdentifier.Parse(this.runStoreResourceId);
@@ -173,6 +174,82 @@ partial class Worker
         return account;
     }
 
+    StorageAccountResource AskExistingStorageAccount(string? storageAccountName, string? resourceGroup, string? subscription)
+    {
+        var subscriptions = StorageSubscriptions();
+        string subscriptionId = "";
+        if (subscription != null)
+        {
+            var foundSubscription = Array.FindIndex(subscriptions, item => item.id == subscription || string.Compare(item.name, subscription, StringComparison.InvariantCultureIgnoreCase) == 0);
+            if (foundSubscription < 0)
+            {
+                throw new ArgumentException($"Subscription '{subscription}' doesn't exist or has no accessible storage accounts.");
+            }
+            subscription = subscriptions[foundSubscription].name;
+            subscriptionId = subscriptions[foundSubscription].id;
+        }
+        else if (subscriptions.Length == 1)
+        {
+            subscription = subscriptions[0].name;
+            subscriptionId = subscriptions[0].id;
+            WriteLine($"Using subscription {subscription} ({subscriptionId}).");
+        }
+        else
+        {
+            if (IsInputRedirected)
+            {
+                throw new InvalidOperationException("Specify Azure subscription using --subscription option.");
+            }
+            var chosenSubscription = Choose("Subscriptions:", Array.ConvertAll(subscriptions, s => s.name), false);
+            subscription = subscriptions[chosenSubscription].name;
+            subscriptionId = subscriptions[chosenSubscription].id;
+        }
+
+        var resourceGroups = StorageResourceGroups(subscriptionId);
+        if (resourceGroup != null)
+        {
+            if (resourceGroups.All(item => string.Compare(item, resourceGroup, StringComparison.InvariantCultureIgnoreCase) != 0))
+            {
+                throw new ArgumentException($"Resource group {resourceGroup} doesn't exist or has no accessible storage accounts.");
+            }
+        }
+        else if (resourceGroups.Length == 1)
+        {
+            resourceGroup = resourceGroups[0];
+            WriteLine($"Using resource group {resourceGroup}.");
+        }
+        else
+        {
+            if (IsInputRedirected)
+            {
+                throw new InvalidOperationException("Specify resource group using --resourcegroup option.");
+            }
+            var chosenRG = Choose("Resource groups:", resourceGroups, false);
+            resourceGroup = resourceGroups[chosenRG];
+        }
+
+        var storageAccounts = Array.ConvertAll(StorageAccountIds(subscriptionId, resourceGroup), id => ResourceIdentifier.Parse(id));
+        if (storageAccountName != null)
+        {
+            var foundSA = Array.FindIndex(storageAccounts, item => string.Compare(item.Name, storageAccountName, StringComparison.InvariantCultureIgnoreCase) == 0);
+            if (foundSA < 0)
+            {
+                throw new ArgumentException($"Storage account {storageAccountName} not found or inaccessible.");
+            }
+            return Arm.GetStorageAccountResource(storageAccounts[foundSA]);
+        }
+        else if (storageAccounts.Length == 1)
+        {
+            WriteLine($"Using storage account {storageAccounts[0].Name}.");
+            return Arm.GetStorageAccountResource(storageAccounts[0]);
+        }
+        else
+        {
+            var chosenSA = Choose("Storage accounts:", Array.ConvertAll(storageAccounts, a => a.Name), false);
+            return Arm.GetStorageAccountResource(storageAccounts[chosenSA]);
+        }
+    }
+
     StorageAccountResource AskStorageAccount(string? storageAccountName, ResourceGroupResource resourceGroup, bool createIfNotExists)
     {
         StorageAccountCollection storageAccounts = resourceGroup.GetStorageAccounts();
@@ -271,10 +348,12 @@ partial class Worker
         return all.GetAll().ToArray()[chosen].Data.Name;
     }
 
-    AppServiceConfigurationDictionary? FindWebSiteSettings(StorageAccountResource storageAccount, string? blobContainerName, ResourceGroupResource resourceGroup)
+    AppServiceConfigurationDictionary? FindWebSiteSettings(StorageAccountResource storageAccount, string? blobContainerName)
     {
-        List<ResourceIdentifier?> links = resourceGroup.GetSystemTopics()
-            .AsEnumerable()
+        string subscriptionId = storageAccount.Id.SubscriptionId ?? throw new NullReferenceException();
+        string resourceGroup = storageAccount.Id.ResourceGroupName ?? throw new NullReferenceException();
+        List<ResourceIdentifier?> links = SystemTopicIds(subscriptionId, resourceGroup)
+            .Select(id => (SystemTopicResource)Arm.GetSystemTopicResource(ResourceIdentifier.Parse(id)).Get())
             .Where(topic => topic.Data.Source == storageAccount.Id)
             .SelectMany(topic => topic.GetSystemTopicEventSubscriptions()
                 .AsEnumerable()
@@ -327,10 +406,8 @@ partial class Worker
         }
         try
         {
-            var subscriptionResource = AskSubscription(subscription);
-            var resourceGroup = AskResourceGroup(resourceGroupName, subscriptionResource, false, null);
-            var storageAccount = AskStorageAccount(storageAccountName, resourceGroup, false);
-            var appSettings = FindWebSiteSettings(storageAccount, blobContainerName, resourceGroup);
+            var storageAccount = AskExistingStorageAccount(storageAccountName, resourceGroupName, subscription);
+            var appSettings = FindWebSiteSettings(storageAccount, blobContainerName);
             if (appSettings == null)
             {
                 return 1;

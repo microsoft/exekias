@@ -188,6 +188,39 @@ public class Context(InvocationContext cmdContext)
             return false;
         }
     }
+    public (string name, string id)[] StorageSubscriptions()
+    {
+        var tenant = GetArmClient().GetTenants().First();
+        ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(
+            $"resources | where type=='microsoft.storage/storageaccounts' | join (resourcecontainers | where type=='microsoft.resources/subscriptions' | project subscriptionId, sname=name) on subscriptionId| project id=subscriptionId, name=sname"
+            ));
+        return JsonNode.Parse(result.Data)?.AsArray()?.Select(item => (item?["name"]?.GetValue<string>() ?? "(null)", item?["id"]?.GetValue<string>() ?? "(null)")).ToArray() ?? throw new InvalidOperationException("No subscriptions with storage accounts found.");
+    }
+
+    public string[] StorageResourceGroups(string subscriptionId)
+    {
+        var tenant = GetArmClient().GetTenants().First();
+        ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(
+            $"resources|where type=='microsoft.storage/storageaccounts' and subscriptionId=='{subscriptionId}'| project resourceGroup | distinct resourceGroup"
+            ));
+        return JsonNode.Parse(result.Data)?.AsArray()?.Select(item => item?["resourceGroup"]?.GetValue<string>() ?? "(null)").ToArray() ?? throw new InvalidOperationException("No resource groups with storage accounts found.");
+    }
+
+    public string[] StorageAccountIds(string subscriptionId, string resourceGroup)
+    {
+        var tenant = GetArmClient().GetTenants().First();
+        var query = $"resources|where type=='microsoft.storage/storageaccounts' and subscriptionId=='{subscriptionId}' and resourceGroup=='{resourceGroup}' | project id";
+        ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
+        return JsonNode.Parse(result.Data)?.AsArray()?.Select(item => item?["id"]?.GetValue<string>() ?? "(null)").ToArray() ?? throw new InvalidOperationException("No storage accounts found.");
+    }
+
+    public string[] SystemTopicIds(string subscriptionId, string resourceGroup)
+    {
+        var tenant = GetArmClient().GetTenants().First();
+        var query = $"resources|where type=='microsoft.eventgrid/systemtopics' and subscriptionId=='{subscriptionId}' and resourceGroup=='{resourceGroup}' | project id";
+        ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
+        return JsonNode.Parse(result.Data)?.AsArray()?.Select(item => item?["id"]?.GetValue<string>() ?? "(null)").ToArray() ?? throw new InvalidOperationException("No storage accounts found.");
+    }
 }
 
 public partial class Worker : Context

@@ -1,4 +1,5 @@
 ﻿using Azure.Core;
+using Azure.ResourceManager;
 using Azure.ResourceManager.AppService;
 using Azure.ResourceManager.Authorization;
 using Azure.ResourceManager.Authorization.Models;
@@ -146,7 +147,8 @@ partial class Worker
         CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
         WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
         BatchAccountResource batchAccount = Arm.GetBatchAccountResource(new ResourceIdentifier(batchAccountId!));
-        AuthorizeCredentials(runStore, metaStore, syncFunction, batchAccount, principalId);
+        SystemTopicResource topic = Arm.GetSystemTopicResource(new ResourceIdentifier(topicId!));
+        AuthorizeCredentials(runStore, topic, metaStore, syncFunction, batchAccount, principalId);
 
         // deploy syncFunction code from sync.zip
         var runChangeEventSink = "RunChangeEventSink";
@@ -157,7 +159,6 @@ partial class Worker
         // subscribe sync function app to the storage eventgrid events
         WriteLine("Subscribing backend to storage events.");
         SiteFunctionResource update = syncFunction.GetSiteFunctions().Get(runChangeEventSink);
-        var topic = Arm.GetSystemTopicResource(new ResourceIdentifier(topicId!));
         var subscriptions = topic.GetSystemTopicEventSubscriptions();
         subscriptions.CreateOrUpdate(Azure.WaitUntil.Completed, syncFunction.Data.Name, new EventGridSubscriptionData()
         {
@@ -217,27 +218,37 @@ partial class Worker
         });
     }
 
+    void Authorize(string resourceKind, ArmResource resource, string roleName, Guid principalId){
+        var readerRole = resource
+            .GetAuthorizationRoleDefinitions()
+            .GetAll()
+            .FirstOrDefault(r => r.Data.RoleName == roleName)
+            ?.Data ?? throw new InvalidOperationException($"Cannot find {roleName} role definition.");
+        if (resource.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != readerRole.Id))
+        {
+            resource.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
+                roleDefinitionId: readerRole.Id,
+                principalId: principalId));
+            WriteLine($"Authorized {principalId} to access {resourceKind} {resource.Id.Name}: {readerRole.Description}.");
+        }
+    }
+
     void AuthorizeCredentials(
         StorageAccountResource data,
+        SystemTopicResource topic,
         CosmosDBAccountResource meta,
         WebSiteResource functionApp,
         BatchAccountResource batch,
         Guid principalId)
     {
-        var blobRole = "Storage Blob Data Contributor";
-        var blobDataContributorRole = data
-            .GetAuthorizationRoleDefinitions()
-            .GetAll()
-            .FirstOrDefault(r => r.Data.RoleName == blobRole)
-            ?.Data ?? throw new InvalidOperationException($"Cannot find {blobRole} role definition.");
-        if (data.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != blobDataContributorRole.Id))
-        {
-            data.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
-                roleDefinitionId: blobDataContributorRole.Id,
-                principalId: principalId));
-            WriteLine($"Authorized {principalId} to access storage account {data.Id.Name}: {blobDataContributorRole.Description}.");
-        }
+        // to discover storage and linked web site through Azure resource graph
+        Authorize("storage account", data, "Reader", principalId);
+        Authorize("storage event topic", topic, "Reader", principalId);
 
+        // to read/write data
+        Authorize("storage account", data, "Storage Blob Data Contributor", principalId);
+
+        // to read/hide runs
         var cosmosRole = "Cosmos DB Built-in Data Contributor";
         var cosmosSqlReaderRole = meta
             .GetCosmosDBSqlRoleDefinitions()
@@ -255,33 +266,11 @@ partial class Worker
             WriteLine($"Authorized {principalId} to access Cosmos DB account {meta.Id.Name} as {cosmosRole}.");
         }
 
-        var functionRole = "Website Contributor";
-        var functionWebsiteContributorRole = functionApp
-            .GetAuthorizationRoleDefinitions()
-            .GetAll()
-            .FirstOrDefault(r => r.Data.RoleName == functionRole)
-            ?.Data ?? throw new InvalidOperationException($"Cannot find {functionRole} role definition.");
-        if (functionApp.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != functionWebsiteContributorRole.Id))
-        {
-            functionApp.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
-                roleDefinitionId: functionWebsiteContributorRole.Id,
-                principalId: principalId));
-            WriteLine($"Authorized {principalId} to access Function app {functionApp.Id.Name}: {functionWebsiteContributorRole.Description}");
-        }
+        // to allow reading configuration parameters: metadata file pattern, cosmos link, batch link
+        Authorize("function app", functionApp, "Website Contributor", principalId);
 
-        var batchRoleName = "Contributor";
-        var batchRole = batch
-            .GetAuthorizationRoleDefinitions()
-            .GetAll()
-            .FirstOrDefault(r => r.Data.RoleName == batchRoleName)
-            ?.Data ?? throw new InvalidOperationException($"Cannot find {batchRoleName} role definition.");
-        if (batch.GetRoleAssignments().GetAll().All(r => r.Data.PrincipalId != principalId || r.Data.RoleDefinitionId != batchRole.Id))
-        {
-            batch.GetRoleAssignments().CreateOrUpdate(Azure.WaitUntil.Completed, Guid.NewGuid().ToString(), new RoleAssignmentCreateOrUpdateContent(
-                roleDefinitionId: batchRole.Id,
-                principalId: principalId));
-            WriteLine($"Authorized {principalId} to access Batch account {batch.Id.Name} as {batchRoleName}: {batchRole.Description}.");
-        }
+        // to allow custom batch jobs
+        Authorize("batch account", batch, "Contributor", principalId);
     }
 
     async Task<(Guid principalId, string principalName)> GetPrincipal(string principalId)
@@ -471,6 +460,12 @@ partial class Worker
             var runStoreResourceTask = Arm.GetStorageAccountResource(runStoreRid).GetAsync();
             var exekiasStoreRid = ResourceIdentifier.Parse(exekiasStoreResourceId);
             var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(exekiasStoreRid).GetAsync();
+            var topicRid = ResourceIdentifier.Parse(string.Format(
+                "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.EventGrid/systemTopics/{2}",
+                runStoreRid.SubscriptionId,
+                runStoreRid.ResourceGroupName,
+                runStoreRid.Name));
+            var topicResourceTask = Arm.GetSystemTopicResource(topicRid).GetAsync();
             var functionRid = ResourceIdentifier.Parse(string.Format(
                 "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Web/sites/{2}-{3}",
                 exekiasStoreRid.SubscriptionId,
@@ -484,8 +479,8 @@ partial class Worker
                 exekiasStoreRid.ResourceGroupName,
                 exekiasStoreRid.Name));
             var batchResourceTask = Arm.GetBatchAccountResource(batchRid).GetAsync();
-            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask, functionResourceTask, batchResourceTask);
-            AuthorizeCredentials(runStoreResourceTask.Result.Value, metaStoreResourceTask.Result.Value, functionResourceTask.Result.Value, batchResourceTask.Result.Value, principalGuid);
+            await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask, topicResourceTask, functionResourceTask, batchResourceTask);
+            AuthorizeCredentials(runStoreResourceTask.Result.Value, topicResourceTask.Result.Value, metaStoreResourceTask.Result.Value, functionResourceTask.Result.Value, batchResourceTask.Result.Value, principalGuid);
             return 0;
         }
         catch (Exception ex)
