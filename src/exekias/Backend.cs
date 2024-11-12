@@ -292,6 +292,9 @@ partial class Worker
         static (Guid principalId, string principalName) returnGroup(Entra.Group group) =>
             (new Guid(group.Id!), $"group {group.DisplayName}");
 
+        static (Guid principalId, string principalName) returnServicePrincipal(Entra.ServicePrincipal sp) =>
+            (new Guid(sp.Id!), $"{sp.ServicePrincipalType} {sp.DisplayName}");
+
         var graphClient = new Microsoft.Graph.GraphServiceClient(Credential);
         if (Guid.TryParse(principalId, out Guid guid))
         {
@@ -319,9 +322,12 @@ partial class Worker
             {
                 requestConfiguration.QueryParameters.Filter = $"displayName eq '{principalId}'";
             });
+            var spTask = graphClient.ServicePrincipals.GetAsync(requestConfiguration =>{
+                requestConfiguration.QueryParameters.Filter = $"displayName eq '{principalId}'";
+            });
             try
             {
-                await Task.WhenAll(userTask1, userTask2, groupTask);
+                await Task.WhenAll(userTask1, userTask2, groupTask, spTask);
             }
             catch (Entra.ODataErrors.ODataError) { }
             if (userTask1.IsCompletedSuccessfully && userTask1.Result?.Value is not null && userTask1.Result.Value.Count == 1)
@@ -335,6 +341,10 @@ partial class Worker
             if (groupTask.IsCompletedSuccessfully && groupTask.Result?.Value is not null && groupTask.Result.Value.Count == 1)
             {
                 return returnGroup(groupTask.Result.Value[0]);
+            }
+            if (spTask.IsCompletedSuccessfully && spTask.Result?.Value is not null && spTask.Result.Value.Count == 1)
+            {
+                return returnServicePrincipal(spTask.Result.Value[0]);
             }
         }
         throw new InvalidOperationException($"Cannot find user or group with id or mail '{principalId}'.");
