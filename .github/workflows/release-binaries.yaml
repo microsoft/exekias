@@ -6,16 +6,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@4
+      - uses: actions/checkout@v4
       - name: install Bicep
         run: |
           curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
           chmod +x ${{ runner.temp }}/bicep
           echo "BicepPath=${{ runner.temp }}/bicep" >> $GITHUB_ENV
-          - name: Setup .NET
-          uses: actions/setup-dotnet@v4
-          with:
-            dotnet-version: 6.0.x
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
       - name: Download NetCDF
         shell: pwsh
         run: |
