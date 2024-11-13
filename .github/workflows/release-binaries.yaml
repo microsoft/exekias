@@ -1,0 +1,54 @@
+name: Build and upload release binaries
+on:
+  release:
+    types: [created]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@4
+      - name: install Bicep
+        run: |
+          curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x ${{ runner.temp }}/bicep
+          echo "BicepPath=${{ runner.temp }}/bicep" >> $GITHUB_ENV
+          - name: Setup .NET
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: 6.0.x
+      - name: Download NetCDF
+        shell: pwsh
+        run: |
+          Invoke-WebRequest $env:URL_NETCDF_WIN -OutFile ${{ runner.temp }}/netcdf.exe
+          7z x ${{ runner.temp }}/netcdf.exe bin/*.dll -o${{ runner.temp }} -y
+          Get-ChildItem ${{ runner.temp }}/bin
+      - name: Build
+        run: |
+          dotnet publish src/exekias --configuration Release --self-contained --runtime win-x64
+          pushd src/exekias/bin/Release/net6.0/win-64/publish
+          7z a -bd $GITHUB_WORKSPACE/exekias.cli.win-x64.zip .
+          popd
+          dotnet publish src/exekias --configuration Release --self-contained --runtime linux-x64
+          pushd src/exekias/bin/Release/net6.0/linux-64/publish
+          7z a -bd $GITHUB_WORKSPACE/exekias.cli.linux-x64.zip .
+          popd
+        env:
+          LIBNETCDFPATH: ${{ runner.temp }}/bin/netcdf.dll
+      - name: Upload windows cli
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.upload_url }}
+          asset_path: ./exekias.cli.win-x64.zip
+          asset_name: exekias.cli.win-x64.zip
+          asset_content_type: application/zip
+      - name: Upload linux cli
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.upload_url }}
+          asset_path: ./exekias.cli.linux-x64.zip
+          asset_name: exekias.cli.linux-x64.zip
+          asset_content_type: application/zip
