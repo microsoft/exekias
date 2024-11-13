@@ -5,7 +5,7 @@ on:
 env:
   URL_NETCDF_WIN: https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netCDF4.9.2-NC4-64.exe
 permissions:
-  id-token: write
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
