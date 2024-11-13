@@ -2,6 +2,8 @@ name: Build and upload release binaries
 on:
   release:
     types: [created]
+env:
+  URL_NETCDF_WIN: https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netCDF4.9.2-NC4-64.exe
 jobs:
   build:
     runs-on: ubuntu-latest
