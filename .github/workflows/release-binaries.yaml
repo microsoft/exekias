@@ -14,10 +14,6 @@ jobs:
           curl --no-progress-meter -Lo ${{ runner.temp }}/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
           chmod +x ${{ runner.temp }}/bicep
           echo "BicepPath=${{ runner.temp }}/bicep" >> $GITHUB_ENV
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 6.0.x
       - name: Download NetCDF
         shell: pwsh
         run: |
@@ -26,12 +22,12 @@ jobs:
           Get-ChildItem ${{ runner.temp }}/bin
       - name: Build
         run: |
-          dotnet publish src/exekias --configuration Release --self-contained --runtime win-x64
-          pushd src/exekias/bin/Release/net6.0/win-64/publish
+          dotnet publish src/exekias --configuration Release --self-contained --runtime win-x64 --output publish/win-x64
+          pushd publish/win-x64
           7z a -bd $GITHUB_WORKSPACE/exekias.cli.win-x64.zip .
           popd
-          dotnet publish src/exekias --configuration Release --self-contained --runtime linux-x64
-          pushd src/exekias/bin/Release/net6.0/linux-64/publish
+          dotnet publish src/exekias --configuration Release --self-contained --runtime linux-x64 --output publish/linux-x64
+          pushd publish/linux-x64
           7z a -bd $GITHUB_WORKSPACE/exekias.cli.linux-x64.zip .
           popd
         env:
