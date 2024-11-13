@@ -4,14 +4,12 @@ on:
     types: [created]
 env:
   URL_NETCDF_WIN: https://downloads.unidata.ucar.edu/netcdf-c/4.9.2/netCDF4.9.2-NC4-64.exe
+permissions:
+  id-token: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - env:
-          EVENT_CONTEXT: ${{ toJSON(github.event) }}
-        run: |
-          echo $EVENT_CONTEXT
       - uses: actions/checkout@v4
       - name: install Bicep
         run: |
