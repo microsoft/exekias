@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ## [2.3.3]
 
+## Added
+- `devicecode` variant to `--credential` option.
+
 ## Fixed
 - Resource discovery in `config create`command is now done with resource graph query.
 - Extended minimum role assignment to allow `config create`.

@@ -38,6 +38,7 @@ public class Context(InvocationContext cmdContext)
             "cli" => new AzureCliCredential(),
             "pwsh" => new AzurePowerShellCredential(),
             "msi" => new ManagedIdentityCredential(),
+            "devicecode" => new DeviceCodeCredential(),
             _ => new ManagedIdentityCredential(option)
         };
     }
@@ -101,7 +102,7 @@ public class Context(InvocationContext cmdContext)
 
     public static Option<string> credentialOption = new(
         "--credential",
-        "Credential to use, one of 'interactive', 'cli', 'pwsh', 'msi' or a GUID of a user assigned managed identity.");
+        "Credential to use, one of 'interactive', 'devicecode', 'cli', 'pwsh', 'msi' or a GUID of a user assigned managed identity.");
 
     public TokenCredential Credential => GetCredential();
 
