@@ -18,7 +18,10 @@ partial class Worker
         var prefix = run == "" ? "" : run + '/';
         await containerClient.GetBlobsAsync(prefix: prefix).ForEachAsync(blob =>
         {
-            WriteLine($"{blob.Properties.LastModified?.LocalDateTime} {blob.Properties.ContentLength,19} {blob.Name.Substring(prefix.Length)}");
+            if (blob.Properties.ContentLength > 0)  // floders have zero length
+            {
+                WriteLine($"{blob.Properties.LastModified?.LocalDateTime} {blob.Properties.ContentLength,19} {blob.Name.Substring(prefix.Length)}");
+            }
         });
         return 0;
     }
@@ -135,38 +138,41 @@ partial class Worker
         {
             var blobClient = containerClient.GetBlobClient(blob.Name);
             var localPath = Path.Combine(path, blob.Name);
-            var localDir = Path.GetDirectoryName(localPath);
-            if (localDir == null) { throw new Exception("Unexpected algorithmic error."); }
+            var localDir = Path.GetDirectoryName(localPath) ?? throw new Exception("Unexpected algorithmic error.");
             if (!Directory.Exists(localDir))
             {
                 Directory.CreateDirectory(localDir);
             }
-            tasks.Add(Task.Run(async () =>
+            if (blob.Properties.ContentLength > 0)  // floders have zero length
             {
-                BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
-                var blobLastWriteTime = BlobLastWriteTime(blobProperties);
-                var fi = new FileInfo(localPath);
-                if (fi.Exists && fi.Length == blobProperties.ContentLength
+                tasks.Add(Task.Run(async () =>
+                {
+                    BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
+                    var blobLastWriteTime = BlobLastWriteTime(blobProperties);
+                    var fi = new FileInfo(localPath);
+                    if (fi.Exists && fi.Length == blobProperties.ContentLength
                     && Math.Abs((blobLastWriteTime - fi.LastWriteTimeUtc).TotalMilliseconds) < 1)
-                {
-                    WriteLine($"Skipping {fi.FullName} because it is up to date.");
-                    pi.NewProgress(-1).Report(0);  // report skipped
-                }
-                else
-                {
-                    WriteLine($"Downloading {blobProperties.ContentLength} B to {fi.FullName}.");
-                    await blobClient.DownloadToAsync(localPath, new BlobDownloadToOptions()
                     {
-                        TransferOptions = new Azure.Storage.StorageTransferOptions()
+                        WriteLine($"Skipping {fi.FullName} because it is up to date.");
+                        pi.NewProgress(-1).Report(0);  // report skipped
+                    }
+                    else
+                    {
+                        WriteLine($"Downloading {blobProperties.ContentLength} B to {fi.FullName}.");
+                        await blobClient.DownloadToAsync(localPath, new BlobDownloadToOptions()
                         {
-                            MaximumConcurrency = 8,
-                            MaximumTransferSize = 16 * 1024 * 1024,
-                        },
-                        ProgressHandler = pi.NewProgress(blobProperties.ContentLength)
-                    });
-                    fi.LastWriteTimeUtc = blobLastWriteTime.DateTime;
-                }
-            }));
+                            TransferOptions = new Azure.Storage.StorageTransferOptions()
+                            {
+                                MaximumConcurrency = 8,
+                                MaximumTransferSize = 16 * 1024 * 1024,
+                            },
+                            ProgressHandler = pi.NewProgress(blobProperties.ContentLength)
+                        });
+                        fi.LastWriteTimeUtc = blobLastWriteTime.DateTime;
+                    }
+
+                }));
+            }
         });
         await Task.WhenAll(tasks);
         pi.Flush();

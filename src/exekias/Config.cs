@@ -148,7 +148,8 @@ partial class Worker
                 )
             {
                 AllowBlobPublicAccess = false,
-                AllowSharedKeyAccess = false
+                AllowSharedKeyAccess = false,
+                IsHnsEnabled = true
             }
             ).Value;
         // retry until BlobService available on the account

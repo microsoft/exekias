@@ -122,7 +122,7 @@ See [Open a Git repository or GitHub PR in an isolated container volume](https:/
 
 - Test the command is running
 
-        ./src/exekias/bin/Release/net6.0/publish/exekias -h
+        ./src/exekias/bin/Release/net8.0/publish/exekias -h
 
 
 ## Running canary script
