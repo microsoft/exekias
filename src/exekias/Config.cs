@@ -349,49 +349,56 @@ partial class Worker
         return all.GetAll().ToArray()[chosen].Data.Name;
     }
 
-    AppServiceConfigurationDictionary? FindWebSiteSettings(StorageAccountResource storageAccount, string? blobContainerName)
+    SystemTopicEventSubscriptionResource? FindEventSubscription(ResourceIdentifier storageAccount, string? blobContainerName)
     {
-        string subscriptionId = storageAccount.Id.SubscriptionId ?? throw new NullReferenceException();
-        string resourceGroup = storageAccount.Id.ResourceGroupName ?? throw new NullReferenceException();
-        List<ResourceIdentifier?> links = SystemTopicIds(subscriptionId, resourceGroup)
+        string subscriptionId = storageAccount.SubscriptionId ?? throw new NullReferenceException();
+        string resourceGroup = storageAccount.ResourceGroupName ?? throw new NullReferenceException();
+        List<SystemTopicEventSubscriptionResource?> links = SystemTopicIds(subscriptionId, resourceGroup)
             .Select(id => (SystemTopicResource)Arm.GetSystemTopicResource(ResourceIdentifier.Parse(id)).Get())
-            .Where(topic => topic.Data.Source == storageAccount.Id)
+            .Where(topic => topic.Data.Source == storageAccount)
             .SelectMany(topic => topic.GetSystemTopicEventSubscriptions()
                 .AsEnumerable()
-                .Select(subscription => subscription.Data.Destination is AzureFunctionEventSubscriptionDestination destination
-                    ? destination.ResourceId.Parent
-                    : null)
-                .Where(id =>
+                .Where(subscription =>
                 {
-                    if (id is null)
+                    if (subscription.Data.Destination is AzureFunctionEventSubscriptionDestination destination)
                     {
-                        return false;
-                    }
-                    else if (blobContainerName is null)
-                    {
-                        return true;
+                        if (blobContainerName is null)
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            var configured = Arm
+                                .GetWebSiteResource(destination.ResourceId.Parent)
+                                .GetApplicationSettings().Value
+                                .Properties.TryGetValue("RunStore:BlobContainerName", out string? cnValue);
+                            return (configured && cnValue == blobContainerName) || (!configured && blobContainerName == "runs");
+                        }
                     }
                     else
                     {
-                        var configured = Arm
-                            .GetWebSiteResource(id)
-                            .GetApplicationSettings().Value
-                            .Properties.TryGetValue("RunStore:BlobContainerName", out string? cnValue);
-                        return (configured && cnValue == blobContainerName) || (!configured && blobContainerName == "runs");
+                        return false;
                     }
                 }))
             .ToList();
         if (links.Count < 1)
         {
-            WriteError($"No Exekias subscribers found for the Azure Storage Account {storageAccount.Id}.");
+            WriteError($"No Exekias subscribers found for the Azure Storage Account {storageAccount}.");
             return null;
         }
         if (links.Count > 1)
         {
-            WriteError($"More than one Exekias subscribers found for the Azure Storage Account {storageAccount.Id}.");
+            WriteError($"More than one Exekias subscribers found for the Azure Storage Account {storageAccount}.");
             return null;
         }
-        return Arm.GetWebSiteResource(links[0]).GetApplicationSettings();
+        return links[0];
+    }
+
+    AppServiceConfigurationDictionary? FindWebSiteSettings(ResourceIdentifier storageAccount, string? blobContainerName)
+    {
+        var link = FindEventSubscription(storageAccount, blobContainerName) ?? throw new ApplicationException();
+        var destination = (AzureFunctionEventSubscriptionDestination)link.Data.Destination;
+        return Arm.GetWebSiteResource(destination.ResourceId.Parent).GetApplicationSettings();
     }
 
     public int DoConfigCreate(
@@ -408,7 +415,7 @@ partial class Worker
         try
         {
             var storageAccount = AskExistingStorageAccount(storageAccountName, resourceGroupName, subscription);
-            var appSettings = FindWebSiteSettings(storageAccount, blobContainerName);
+            var appSettings = FindWebSiteSettings(storageAccount.Id, blobContainerName);
             if (appSettings == null)
             {
                 return 1;
