@@ -2,7 +2,7 @@
 
 # EXEKIAS
 
-Storage services for experimental data.
+[Data Lake](https://azure.microsoft.com/en-us/resources/cloud-computing-dictionary/what-is-a-data-lake) for experimental data.
 
 - [Azure Blobs](https://azure.microsoft.com/en-gb/products/storage/blobs) storage for files.
 - [Azure CosmosDB](https://azure.microsoft.com/en-gb/products/cosmos-db/) for metadata.

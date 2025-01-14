@@ -12,7 +12,7 @@ if (-not (Test-Path $exekias)) {
     exit 1
 }
 
-$batch = Get-AzBatchAccountKey -ResourceGroupName $resourceGroup -Name "${storageAccount}8sync"  -WarningAction SilentlyContinue
+$batch = Get-AzBatchAccountKey -ResourceGroupName $resourceGroup -Name $storageAccount  -WarningAction SilentlyContinue
 
 Write-Host "[$(Get-Date)] Creating and uploading a sample Run..."
 $sample_folder = "./sample"

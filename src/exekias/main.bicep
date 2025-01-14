@@ -26,7 +26,7 @@ resource runStore 'Microsoft.Storage/storageAccounts@2023-04-01' existing = {
 }
 
 resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
-  name: runStoreName
+  name: syncName
   location: location
   properties: {
     source: runStore.id
@@ -36,7 +36,7 @@ resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
 
 // ExekiasStore CosmosDB database
 resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
-  name: syncName
+  name: runStoreName
   location: location
   properties: {
     databaseAccountOfferType: 'Standard'
@@ -184,7 +184,7 @@ resource deploymentContainer 'Microsoft.Storage/storageAccounts/blobServices/con
 
 // Batch account
 resource batchAccount 'Microsoft.Batch/batchAccounts@2024-02-01' = {
-  name: syncName
+  name: runStoreName
   location: location
   identity: {
     type: 'SystemAssigned'
@@ -202,7 +202,7 @@ resource batchAccount 'Microsoft.Batch/batchAccounts@2024-02-01' = {
 
 resource poolIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   location: location
-  name: '${runStoreName}-${storeContainer}-job-identity'
+  name: '${runStoreName}-batch-pool-identity'
 }
 
 resource batchPool 'Microsoft.Batch/batchAccounts/pools@2024-02-01' = {
