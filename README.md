@@ -2,7 +2,7 @@
 
 # EXEKIAS
 
-Storage services for experimental data.
+[Data Lake](https://azure.microsoft.com/en-us/resources/cloud-computing-dictionary/what-is-a-data-lake) for experimental data.
 
 - [Azure Blobs](https://azure.microsoft.com/en-gb/products/storage/blobs) storage for files.
 - [Azure CosmosDB](https://azure.microsoft.com/en-gb/products/cosmos-db/) for metadata.
@@ -122,7 +122,7 @@ See [Open a Git repository or GitHub PR in an isolated container volume](https:/
 
 - Test the command is running
 
-        ./src/exekias/bin/Release/net6.0/publish/exekias -h
+        ./src/exekias/bin/Release/net8.0/publish/exekias -h
 
 
 ## Running canary script

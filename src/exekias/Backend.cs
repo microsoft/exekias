@@ -296,6 +296,10 @@ partial class Worker
             {
                 return returnGroup(group);
             }
+            else if (userOrGroup is Entra.ServicePrincipal sp)
+            {
+                return returnServicePrincipal(sp);
+            }
         }
         else
         {
@@ -459,25 +463,29 @@ partial class Worker
             var runStoreRid = ResourceIdentifier.Parse(runStoreResourceId);
             var runStoreResourceTask = Arm.GetStorageAccountResource(runStoreRid).GetAsync();
             var exekiasStoreRid = ResourceIdentifier.Parse(exekiasStoreResourceId);
+            var link = FindEventSubscription(runStoreRid, runStoreContainerName) ?? throw new ApplicationException();
+            var topicRid = link.Id.Parent;
+            var destination = (AzureFunctionEventSubscriptionDestination)link.Data.Destination;
+            var functionRid = destination.ResourceId.Parent;        
             var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(exekiasStoreRid).GetAsync();
-            var topicRid = ResourceIdentifier.Parse(string.Format(
-                "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.EventGrid/systemTopics/{2}",
-                runStoreRid.SubscriptionId,
-                runStoreRid.ResourceGroupName,
-                runStoreRid.Name));
+            // var topicRid = ResourceIdentifier.Parse(string.Format(
+            //     "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.EventGrid/systemTopics/{2}",
+            //     runStoreRid.SubscriptionId,
+            //     runStoreRid.ResourceGroupName,
+            //     runStoreRid.Name));
             var topicResourceTask = Arm.GetSystemTopicResource(topicRid).GetAsync();
-            var functionRid = ResourceIdentifier.Parse(string.Format(
-                "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Web/sites/{2}-{3}",
-                exekiasStoreRid.SubscriptionId,
-                exekiasStoreRid.ResourceGroupName,
-                exekiasStoreRid.Name,
-                runStoreContainerName));
+            // var functionRid = ResourceIdentifier.Parse(string.Format(
+            //     "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Web/sites/{2}-{3}",
+            //     exekiasStoreRid.SubscriptionId,
+            //     exekiasStoreRid.ResourceGroupName,
+            //     exekiasStoreRid.Name,
+            //     runStoreContainerName));
             var functionResourceTask = Arm.GetWebSiteResource(functionRid).GetAsync();
             var batchRid = ResourceIdentifier.Parse(string.Format(
                 "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.Batch/batchAccounts/{2}",
-                exekiasStoreRid.SubscriptionId,
-                exekiasStoreRid.ResourceGroupName,
-                exekiasStoreRid.Name));
+                runStoreRid.SubscriptionId,
+                runStoreRid.ResourceGroupName,
+                runStoreRid.Name));
             var batchResourceTask = Arm.GetBatchAccountResource(batchRid).GetAsync();
             await Task.WhenAll(runStoreResourceTask, metaStoreResourceTask, topicResourceTask, functionResourceTask, batchResourceTask);
             AuthorizeCredentials(runStoreResourceTask.Result.Value, topicResourceTask.Result.Value, metaStoreResourceTask.Result.Value, functionResourceTask.Result.Value, batchResourceTask.Result.Value, principalGuid);

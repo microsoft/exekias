@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [2.4.0]
+
+## Changed
+- `exekias backend deploy` creates storage account with Hierarchical Namespace Support (HNS) enabled to make it compatible wi Data Lakes and Data Lakehouses.
+- changed default names of a few deployed resources, most notable Cosmos DB account which now has the name of corresponding storage account.
+
+## Fixed
+- `exekias data ls` and `exekias data download` skip zero-length blobs which are folders on an HNS-enables blob storage.
+- `exekias backend allow` can now accept a GUID of an EntraID Application object id.
+
 ## [2.3.3]
 
 ## Added
