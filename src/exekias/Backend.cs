@@ -173,17 +173,9 @@ partial class Worker
             UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0"));
 
         // store the configuration in the run store hidden tag
-        var cfg = new ExekiasConfig(
-            runStoreUrl: runStore.Data.PrimaryEndpoints.BlobUri.ToString(),
-            runStoreMetadataFilePattern: metadataFilePattern,
-            exekiasStoreEndpoint: metaStore.Data.DocumentEndpoint,
-            exekiasStoreDatabaseName: "Exekias",
-            exekiasStoreContainerName: containerName
-        );
-        // Add a tag to the runstore resource
-        var tags = runStore.Data.Tags;
         var patch = new StorageAccountPatch();
-        patch.Tags[$"hidden-exekias-config-{containerName}"] = System.Text.Json.JsonSerializer.Serialize(cfg);
+        patch.Tags[$"hidden-exekias-pattern-{containerName}"] = metadataFilePattern;
+        patch.Tags[$"hidden-exekias-cosmos-{containerName}"] = $"{metaStore.Get().Value.Data.DocumentEndpoint}Exekias/{containerName}";
         runStore.Update(patch);
     }
 

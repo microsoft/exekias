@@ -33,7 +33,7 @@ resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
     topicType: 'Microsoft.Storage.StorageAccounts'
   }
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
 
@@ -57,7 +57,7 @@ resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
     ]
   }
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 
   resource db 'sqlDatabases' = {
@@ -177,7 +177,7 @@ resource syncStore 'Microsoft.Storage/storageAccounts@2023-04-01' = {
     allowSharedKeyAccess: false
   }
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
 
@@ -208,7 +208,7 @@ resource batchAccount 'Microsoft.Batch/batchAccounts@2024-02-01' = {
     }
   }
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
 
@@ -216,7 +216,7 @@ resource poolIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-
   location: location
   name: '${runStoreName}-batch-pool-identity'
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
 
@@ -350,7 +350,7 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
     }
   }
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
 
@@ -484,7 +484,7 @@ resource logStore 'Microsoft.Insights/components@2020-02-02' = {
     WorkspaceResourceId: workspace.id
   }
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
 
@@ -492,7 +492,7 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2020-10-01' = {
   name: syncName
   location: location
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
 
@@ -509,6 +509,6 @@ resource hostingPlan 'Microsoft.Web/serverfarms@2022-03-01' = {
     reserved: true // Linux
   }
   tags:{
-    exekias: runStoreName
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }

@@ -433,9 +433,10 @@ partial class Worker
         }
         try
         {
+            ExekiasConfig cfg;
             StorageAccountResource storageAccount = AskExistingStorageAccount(storageAccountName, resourceGroupName, subscription).Get();
-            var tagPrefix = "hidden-exekias-config-";
-            // build containerName => exekiasConfig map
+            var tagPrefix = "hidden-exekias-pattern-";
+            // build containerName => metadataFilePattern map
             var taggedConfigs = storageAccount.Data.Tags
                 .Where(kv => kv.Key.StartsWith(tagPrefix))
                 .ToDictionary(kv => kv.Key.Substring(tagPrefix.Length), kv => kv.Value);
@@ -443,7 +444,7 @@ partial class Worker
             {
                 if (blobContainerName != null && !taggedConfigs.ContainsKey(blobContainerName))
                 {
-                    WriteError($"No Exekias for container {blobContainerName}. Existing configurations: {string.Join(", ", taggedConfigs.Keys)}");
+                    WriteError($"No Exekias for {storageAccountName}/{blobContainerName}. Existing configurations: {string.Join(", ", taggedConfigs.Keys)}");
                     return 1;
                 }
                 if (blobContainerName == null)
@@ -457,9 +458,23 @@ partial class Worker
                         blobContainerName = AskBlobContainerName(null, taggedConfigs.Keys.ToList(), false);
                     }
                 }
-                File.WriteAllText(ConfigFile.FullName, taggedConfigs[blobContainerName]);
-                WriteLine($"Configuration copied in {ConfigFile.FullName}.");
-                return 0;
+                var cosmosUrl = storageAccount.Data.Tags.TryGetValue($"hidden-exekias-cosmos-{blobContainerName}", out string? value) ? value : null;
+                if (cosmosUrl == null)
+                {
+                    WriteError($"No Exekias Cosmos configuration for {storageAccountName}/{blobContainerName}.");
+                    return 1;
+                }
+                var urlParts = cosmosUrl.Split('/');
+                var cosmosContainer = urlParts[^1];
+                var cosmosDb = urlParts[^2];
+                var cosmosEndpoint = string.Join('/', urlParts[..^2]);
+                cfg = new ExekiasConfig(
+                    runStoreUrl: storageAccount.Data.PrimaryEndpoints.BlobUri.ToString() + blobContainerName,
+                    runStoreMetadataFilePattern: taggedConfigs[blobContainerName],
+                    exekiasStoreEndpoint: cosmosEndpoint,
+                    exekiasStoreDatabaseName: cosmosDb,
+                    exekiasStoreContainerName: cosmosContainer
+                    );
             }
             else
             {
@@ -470,18 +485,18 @@ partial class Worker
                 {
                     return 1;
                 }
-                var cfg = new ExekiasConfig(
+                cfg = new ExekiasConfig(
                     runStoreUrl: appSettings.Properties["RunStore__BlobContainerUrl"],
                     runStoreMetadataFilePattern: appSettings.Properties["RunStore__MetadataFilePattern"],
                     exekiasStoreEndpoint: appSettings.Properties["ExekiasCosmos__Endpoint"],
                     exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos__DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
                     exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos__ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
                     );
+            }
                 using var file = ConfigFile.OpenWrite();
                 JsonSerializer.Serialize(file, cfg);
                 WriteLine($"Configuration saved in {ConfigFile.FullName}.");
                 return 0;
-            }
         }
         catch (InvalidOperationException ex)
         {

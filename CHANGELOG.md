@@ -6,31 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+- Tag all deployed resources with `exekias=runstore/blobContainerName`
+- Save exekias configuration to the storage account hidden tag for easy retrieval.
+- Alias `-n` to the `--accountname` option of `exekias` command.
+
+### Changed
+- `exekias config create` command needs just account name as a minimum and is capable to retrieve configuration from the storage account tag.
+
 ## [2.4.0]
 
-## Changed
+### Changed
 - `exekias backend deploy` creates storage account with Hierarchical Namespace Support (HNS) enabled to make it compatible wi Data Lakes and Data Lakehouses.
 - changed default names of a few deployed resources, most notable Cosmos DB account which now has the name of corresponding storage account.
 
-## Fixed
+### Fixed
 - `exekias data ls` and `exekias data download` skip zero-length blobs which are folders on an HNS-enables blob storage.
 - `exekias backend allow` can now accept a GUID of an EntraID Application object id.
 
 ## [2.3.3]
 
-## Added
+### Added
 - `devicecode` variant to `--credential` option.
 
-## Fixed
+### Fixed
 - Resource discovery in `config create`command is now done with resource graph query.
 - Extended minimum role assignment to allow `config create`.
 
-## Security
+### Security
 - Upgraded `System.Text.Json` reference to address vulnerability in version 8.0.4.
 
 ## [2.3.2]
 
-## Fixed
+### Fixed
 - In `exekias backend deploy` command, restart of function app after ARM deployment is now synchronous
   in an attempt to avoid utility hang at the function code deployment stage.
 - Backend uses EntraID identity and RBAC to access Batch account.
