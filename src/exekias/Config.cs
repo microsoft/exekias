@@ -175,8 +175,26 @@ partial class Worker
         return account;
     }
 
+    /// <summary>
+    /// Ask for an existing storage account.
+    /// </summary>
+    /// <param name="storageAccountName">Storage account name if known.</param>
+    /// <param name="resourceGroup">Case insensitive Azure resource group name if known.</param>
+    /// <param name="subscription">Case insensitive Azure subscription name or id if known</param>
+    /// <returns><see cref="StorageAccountResource"/> object; data not loaded yet.</returns>
+    /// <exception cref="ArgumentException">A name is specified, but the resource doesn't exist.</exception>
+    /// <exception cref="InvalidOperationException">A name is not specified and cannot be requested interactively.</exception>
     StorageAccountResource AskExistingStorageAccount(string? storageAccountName, string? resourceGroup, string? subscription)
     {
+        if (storageAccountName != null)
+        {
+            var found = StorageAccountId(storageAccountName);
+            if (found == null)
+            {
+                throw new ArgumentException($"Storage account {storageAccountName} not found or inaccessible.");
+            }
+            return Arm.GetStorageAccountResource(ResourceIdentifier.Parse(found));
+        }
         var subscriptions = StorageSubscriptions();
         string subscriptionId = "";
         if (subscription != null)
@@ -230,16 +248,7 @@ partial class Worker
         }
 
         var storageAccounts = Array.ConvertAll(StorageAccountIds(subscriptionId, resourceGroup), id => ResourceIdentifier.Parse(id));
-        if (storageAccountName != null)
-        {
-            var foundSA = Array.FindIndex(storageAccounts, item => string.Compare(item.Name, storageAccountName, StringComparison.InvariantCultureIgnoreCase) == 0);
-            if (foundSA < 0)
-            {
-                throw new ArgumentException($"Storage account {storageAccountName} not found or inaccessible.");
-            }
-            return Arm.GetStorageAccountResource(storageAccounts[foundSA]);
-        }
-        else if (storageAccounts.Length == 1)
+        if (storageAccounts.Length == 1)
         {
             WriteLine($"Using storage account {storageAccounts[0].Name}.");
             return Arm.GetStorageAccountResource(storageAccounts[0]);
@@ -309,24 +318,34 @@ partial class Worker
     }
 
     string AskBlobContainerName(string? blobContainerName, StorageAccountResource storageAccount)
+        => AskBlobContainerName(
+            blobContainerName,
+            storageAccount
+                .GetBlobService()
+                .GetBlobContainers()
+                .AsEnumerable()
+                .Select(c => c.Data.Name)
+                .ToList()
+            );
+
+    string AskBlobContainerName(string? blobContainerName, IList<string> all, bool createNew = true)
     {
-        var all = storageAccount.GetBlobService().GetBlobContainers();
         if (blobContainerName != null)
         {
-            if (all.Exists(blobContainerName))
+            if (all.Contains(blobContainerName))
             {
                 return blobContainerName;
             }
             else
             {
-                throw new InvalidOperationException($"{blobContainerName} does not exist in storage account {storageAccount.Data.Name}");
+                throw new InvalidOperationException($"{blobContainerName} does not exist.");
             }
         }
         if (IsInputRedirected)
         {
-            throw new InvalidOperationException("Specify Azure resource group name using --blobcontainer option.");
+            throw new InvalidOperationException("Specify blob container name using --blobcontainer option.");
         }
-        var chosen = Choose("Blob containers:", Array.ConvertAll(all.GetAll().ToArray(), a => a.Data.Name), true);
+        var chosen = Choose("Blob containers:", all, createNew);
         if (chosen < 0)
         {
             // ask for a new blob container name
@@ -346,7 +365,7 @@ partial class Worker
             }
             return name;
         }
-        return all.GetAll().ToArray()[chosen].Data.Name;
+        return all[chosen];
     }
 
     SystemTopicEventSubscriptionResource? FindEventSubscription(ResourceIdentifier storageAccount, string? blobContainerName)
@@ -414,23 +433,70 @@ partial class Worker
         }
         try
         {
-            var storageAccount = AskExistingStorageAccount(storageAccountName, resourceGroupName, subscription);
-            var appSettings = FindWebSiteSettings(storageAccount.Id, blobContainerName);
-            if (appSettings == null)
+            ExekiasConfig cfg;
+            StorageAccountResource storageAccount = AskExistingStorageAccount(storageAccountName, resourceGroupName, subscription).Get();
+            var tagPrefix = "hidden-exekias-pattern-";
+            // build containerName => metadataFilePattern map
+            var taggedConfigs = storageAccount.Data.Tags
+                .Where(kv => kv.Key.StartsWith(tagPrefix))
+                .ToDictionary(kv => kv.Key.Substring(tagPrefix.Length), kv => kv.Value);
+            if (taggedConfigs.Count > 0)
             {
-                return 1;
+                if (blobContainerName != null && !taggedConfigs.ContainsKey(blobContainerName))
+                {
+                    WriteError($"No Exekias for {storageAccountName}/{blobContainerName}. Existing configurations: {string.Join(", ", taggedConfigs.Keys)}");
+                    return 1;
+                }
+                if (blobContainerName == null)
+                {
+                    if (taggedConfigs.Count == 1)
+                    {
+                        blobContainerName = taggedConfigs.Keys.First();
+                    }
+                    else
+                    {
+                        blobContainerName = AskBlobContainerName(null, taggedConfigs.Keys.ToList(), false);
+                    }
+                }
+                var cosmosUrl = storageAccount.Data.Tags.TryGetValue($"hidden-exekias-cosmos-{blobContainerName}", out string? value) ? value : null;
+                if (cosmosUrl == null)
+                {
+                    WriteError($"No Exekias Cosmos configuration for {storageAccountName}/{blobContainerName}.");
+                    return 1;
+                }
+                var urlParts = cosmosUrl.Split('/');
+                var cosmosContainer = urlParts[^1];
+                var cosmosDb = urlParts[^2];
+                var cosmosEndpoint = string.Join('/', urlParts[..^2]);
+                cfg = new ExekiasConfig(
+                    runStoreUrl: storageAccount.Data.PrimaryEndpoints.BlobUri.ToString() + blobContainerName,
+                    runStoreMetadataFilePattern: taggedConfigs[blobContainerName],
+                    exekiasStoreEndpoint: cosmosEndpoint,
+                    exekiasStoreDatabaseName: cosmosDb,
+                    exekiasStoreContainerName: cosmosContainer
+                    );
             }
-            var cfg = new ExekiasConfig(
-                runStoreUrl: appSettings.Properties["RunStore__BlobContainerUrl"],
-                runStoreMetadataFilePattern: appSettings.Properties["RunStore__MetadataFilePattern"],
-                exekiasStoreEndpoint: appSettings.Properties["ExekiasCosmos__Endpoint"],
-                exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos__DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
-                exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos__ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
-                );
-            using var file = ConfigFile.OpenWrite();
-            JsonSerializer.Serialize(file, cfg);
-            WriteLine($"Configuration saved in {ConfigFile.FullName}.");
-            return 0;
+            else
+            {
+                // For compatibility with previous versions, 
+                // find a function app and read configuration from its settings
+                var appSettings = FindWebSiteSettings(storageAccount.Id, blobContainerName);
+                if (appSettings == null)
+                {
+                    return 1;
+                }
+                cfg = new ExekiasConfig(
+                    runStoreUrl: appSettings.Properties["RunStore__BlobContainerUrl"],
+                    runStoreMetadataFilePattern: appSettings.Properties["RunStore__MetadataFilePattern"],
+                    exekiasStoreEndpoint: appSettings.Properties["ExekiasCosmos__Endpoint"],
+                    exekiasStoreDatabaseName: appSettings.Properties.TryGetValue("ExekiasCosmos__DatabaseName", out string? dnValue) && dnValue != null ? dnValue : "Exekias",
+                    exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos__ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
+                    );
+            }
+                using var file = ConfigFile.OpenWrite();
+                JsonSerializer.Serialize(file, cfg);
+                WriteLine($"Configuration saved in {ConfigFile.FullName}.");
+                return 0;
         }
         catch (InvalidOperationException ex)
         {

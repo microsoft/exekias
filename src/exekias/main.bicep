@@ -14,7 +14,7 @@ var syncFunctionName = '${syncName}-${storeContainer}'
 // RunStore storage
 resource runStore 'Microsoft.Storage/storageAccounts@2023-04-01' existing = {
   name: runStoreName
-
+  
   resource blobService 'blobServices' = {
     name: 'default'
     
@@ -31,6 +31,9 @@ resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
   properties: {
     source: runStore.id
     topicType: 'Microsoft.Storage.StorageAccounts'
+  }
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
 
@@ -52,6 +55,9 @@ resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
         name: 'EnableServerless'
       }
     ]
+  }
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
   }
 
   resource db 'sqlDatabases' = {
@@ -170,6 +176,9 @@ resource syncStore 'Microsoft.Storage/storageAccounts@2023-04-01' = {
     allowBlobPublicAccess: false
     allowSharedKeyAccess: false
   }
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
+  }
 }
 
 resource syncBlobService 'Microsoft.Storage/storageAccounts/blobServices@2023-04-01' = {
@@ -198,11 +207,17 @@ resource batchAccount 'Microsoft.Batch/batchAccounts@2024-02-01' = {
       }
     }
   }
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
+  }
 }
 
 resource poolIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   location: location
   name: '${runStoreName}-batch-pool-identity'
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
+  }
 }
 
 resource batchPool 'Microsoft.Batch/batchAccounts/pools@2024-02-01' = {
@@ -334,6 +349,9 @@ resource syncApp 'Microsoft.Web/sites@2023-12-01' = {
       ]
     }
   }
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
+  }
 }
 
 resource ContributorRoleDefinition 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
@@ -379,7 +397,7 @@ resource functionSyncBlobOwnerRoleAssignment 'Microsoft.Authorization/roleAssign
   }
 }
 
-resource functionSyncQueueContrinutorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource functionSyncQueueContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: syncStore
   name: guid(syncApp.id, syncStore.id, queueDataContributorRoleDefinition.id)
   properties: {
@@ -389,7 +407,7 @@ resource functionSyncQueueContrinutorRoleAssignment 'Microsoft.Authorization/rol
   }
 }
 
-resource functionSyncTableContrinutorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource functionSyncTableContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: syncStore
   name: guid(syncApp.id, syncStore.id, tableDataContributorRoleDefinition.id)
   properties: {
@@ -465,11 +483,17 @@ resource logStore 'Microsoft.Insights/components@2020-02-02' = {
     Application_Type: 'general'
     WorkspaceResourceId: workspace.id
   }
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
+  }
 }
 
 resource workspace 'Microsoft.OperationalInsights/workspaces@2020-10-01' = {
   name: syncName
   location: location
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
+  }
 }
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2022-03-01' = {
@@ -483,5 +507,8 @@ resource hostingPlan 'Microsoft.Web/serverfarms@2022-03-01' = {
   }
   properties: {
     reserved: true // Linux
+  }
+  tags:{
+    exekias: '${runStoreName}/${storeContainer}'
   }
 }
