@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] 2025-01-16
+
 ### Added
 - Tag all deployed resources with `exekias=runstore/blobContainerName`
 - Save exekias configuration to the storage account hidden tag for easy retrieval.
@@ -15,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `exekias config create` command needs just account name as a minimum and is capable to retrieve configuration from the storage account tag.
 
-## [2.4.0]
+## [2.4.0] 2025-01-14
 
 ### Changed
 - `exekias backend deploy` creates storage account with Hierarchical Namespace Support (HNS) enabled to make it compatible wi Data Lakes and Data Lakehouses.
@@ -25,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `exekias data ls` and `exekias data download` skip zero-length blobs which are folders on an HNS-enables blob storage.
 - `exekias backend allow` can now accept a GUID of an EntraID Application object id.
 
-## [2.3.3]
+## [2.3.3] 2024-11-14
 
 ### Added
 - `devicecode` variant to `--credential` option.
