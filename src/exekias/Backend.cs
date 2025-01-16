@@ -171,6 +171,20 @@ partial class Worker
         WriteLine("Adding application package to batch account.");
         PoolAssignApplication(batchPoolId!,
             UploadBatchApplicationPackage(tablesPath, batchAccountId!, "dataimport", "1.0.0"));
+
+        // store the configuration in the run store hidden tag
+        var cfg = new ExekiasConfig(
+            runStoreUrl: runStore.Data.PrimaryEndpoints.BlobUri.ToString(),
+            runStoreMetadataFilePattern: metadataFilePattern,
+            exekiasStoreEndpoint: metaStore.Data.DocumentEndpoint,
+            exekiasStoreDatabaseName: "Exekias",
+            exekiasStoreContainerName: containerName
+        );
+        // Add a tag to the runstore resource
+        var tags = runStore.Data.Tags;
+        var patch = new StorageAccountPatch();
+        patch.Tags[$"hidden-exekias-config-{containerName}"] = System.Text.Json.JsonSerializer.Serialize(cfg);
+        runStore.Update(patch);
     }
 
     WebSiteResource DeployFunctionCode(WebSiteResource funcApp, string zipPath, string expected)

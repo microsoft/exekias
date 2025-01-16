@@ -145,7 +145,7 @@ public class Context(InvocationContext cmdContext)
     /// <returns>Index of the chosen item.</returns>
     /// <exception cref="InvalidOperationException">System console is not interactive.</exception>
     /// <exception cref="EndOfStreamException">Input has been closed without giving a choice.</exception>
-    public int Choose(string title, string[] items, bool createNew)
+    public int Choose(string title, IList<string> items, bool createNew)
     {
         if (Console.IsInputRedirected)
         {
@@ -158,13 +158,13 @@ public class Context(InvocationContext cmdContext)
         WriteLine(title);
         if (createNew)
             WriteLine("0 - (create new)");
-        for (int i = 0; i < items.Length; i++) { WriteLine($"{i + 1} - {items[i]}"); }
+        for (int i = 0; i < items.Count; i++) { WriteLine($"{i + 1} - {items[i]}"); }
         while (input < 0)
         {
-            cmdContext.Console.Write($"Choose a number between {lower} and {items.Length}: ");
+            cmdContext.Console.Write($"Choose a number between {lower} and {items.Count}: ");
             line = Console.ReadLine();
             if (line == null) { throw new EndOfStreamException(); }
-            if (int.TryParse(line, out int parsed) && parsed >= lower && parsed <= items.Length) { input = parsed; }
+            if (int.TryParse(line, out int parsed) && parsed >= lower && parsed <= items.Count) { input = parsed; }
         }
         return input - 1;
     }
@@ -214,6 +214,16 @@ public class Context(InvocationContext cmdContext)
         ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
         return JsonNode.Parse(result.Data)?.AsArray()?.Select(item => item?["id"]?.GetValue<string>() ?? "(null)").ToArray() ?? throw new InvalidOperationException("No storage accounts found.");
     }
+
+    public string? StorageAccountId(string storageAccountName)
+    {
+        var tenant = GetArmClient().GetTenants().First();
+        var query = $"resources|where type=='microsoft.storage/storageaccounts' and name=='{storageAccountName}'|project id ";
+        ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
+        var found = JsonNode.Parse(result.Data)?.AsArray();
+        return found?.Count == 1 ? found[0]?["id"]?.GetValue<string>() : null;
+    }
+
 
     public string[] SystemTopicIds(string subscriptionId, string resourceGroup)
     {

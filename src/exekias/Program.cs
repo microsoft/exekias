@@ -17,7 +17,7 @@ var azureSubscriptionOption = new Option<string?>(["--subscription", "-s"], "Azu
 configCreateCommand.AddOption(azureSubscriptionOption);
 var resourceGroupOption = new Option<string?>(["--resourcegroup", "-g"], "Azure resource group name.");
 configCreateCommand.AddOption(resourceGroupOption);
-var storageAccountOption = new Option<string?>("--storageaccount", "Azure storage account name.");
+var storageAccountOption = new Option<string?>(["--storageaccount", "-n"], "Azure storage account name.");
 configCreateCommand.AddOption(storageAccountOption);
 var blobContainerOption = new Option<string>("--blobcontainer", "Blob container name. For a new sttorage account the default container name is 'runs'.");
 configCreateCommand.AddOption(blobContainerOption);
