@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.1] 2025-01-17
+
+### Fixed
+- a bug in `exekias backend allow` command caused by regression and a bug in Azure Resource Graph.
+
 ## [2.5.0] 2025-01-16
 
 ### Added

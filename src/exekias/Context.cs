@@ -210,7 +210,8 @@ public class Context(InvocationContext cmdContext)
     public string[] StorageAccountIds(string subscriptionId, string resourceGroup)
     {
         var tenant = GetArmClient().GetTenants().First();
-        var query = $"resources|where type=='microsoft.storage/storageaccounts' and subscriptionId=='{subscriptionId}' and resourceGroup=='{resourceGroup}' | project id";
+        var query = $"resources|where type=='microsoft.storage/storageaccounts' and subscriptionId=='{subscriptionId}' and resourceGroup=='{resourceGroup.ToLower()}' | project id";
+        // resource group case inconsistency is a bug in Azure Resource Graph https://github.com/Azure/azure-rest-api-specs/issues/31379
         ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
         return JsonNode.Parse(result.Data)?.AsArray()?.Select(item => item?["id"]?.GetValue<string>() ?? "(null)").ToArray() ?? throw new InvalidOperationException("No storage accounts found.");
     }
@@ -228,7 +229,8 @@ public class Context(InvocationContext cmdContext)
     public string[] SystemTopicIds(string subscriptionId, string resourceGroup)
     {
         var tenant = GetArmClient().GetTenants().First();
-        var query = $"resources|where type=='microsoft.eventgrid/systemtopics' and subscriptionId=='{subscriptionId}' and resourceGroup=='{resourceGroup}' | project id";
+        var query = $"resources|where type=='microsoft.eventgrid/systemtopics' and subscriptionId=='{subscriptionId}' and resourceGroup=='{resourceGroup.ToLower()}' | project id";
+        // resource group case inconsistency is a bug in Azure Resource Graph https://github.com/Azure/azure-rest-api-specs/issues/31379
         ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
         return JsonNode.Parse(result.Data)?.AsArray()?.Select(item => item?["id"]?.GetValue<string>() ?? "(null)").ToArray() ?? throw new InvalidOperationException("No storage accounts found.");
     }

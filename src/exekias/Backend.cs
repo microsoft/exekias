@@ -469,7 +469,7 @@ partial class Worker
             var runStoreRid = ResourceIdentifier.Parse(runStoreResourceId);
             var runStoreResourceTask = Arm.GetStorageAccountResource(runStoreRid).GetAsync();
             var exekiasStoreRid = ResourceIdentifier.Parse(exekiasStoreResourceId);
-            var link = FindEventSubscription(runStoreRid, runStoreContainerName) ?? throw new ApplicationException();
+            var link = FindEventSubscription(runStoreRid, Config.runStoreUrl) ?? throw new ApplicationException();
             var topicRid = link.Id.Parent;
             var destination = (AzureFunctionEventSubscriptionDestination)link.Data.Destination;
             var functionRid = destination.ResourceId.Parent;        

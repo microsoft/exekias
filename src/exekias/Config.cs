@@ -368,7 +368,7 @@ partial class Worker
         return all[chosen];
     }
 
-    SystemTopicEventSubscriptionResource? FindEventSubscription(ResourceIdentifier storageAccount, string? blobContainerName)
+    SystemTopicEventSubscriptionResource? FindEventSubscription(ResourceIdentifier storageAccount, string? blobContainerUrl)
     {
         string subscriptionId = storageAccount.SubscriptionId ?? throw new NullReferenceException();
         string resourceGroup = storageAccount.ResourceGroupName ?? throw new NullReferenceException();
@@ -377,11 +377,11 @@ partial class Worker
             .Where(topic => topic.Data.Source == storageAccount)
             .SelectMany(topic => topic.GetSystemTopicEventSubscriptions()
                 .AsEnumerable()
-                .Where(subscription =>
+                .Where(eventSubscription =>
                 {
-                    if (subscription.Data.Destination is AzureFunctionEventSubscriptionDestination destination)
+                    if (eventSubscription.Data.Destination is AzureFunctionEventSubscriptionDestination destination)
                     {
-                        if (blobContainerName is null)
+                        if (blobContainerUrl is null)
                         {
                             return true;
                         }
@@ -390,8 +390,8 @@ partial class Worker
                             var configured = Arm
                                 .GetWebSiteResource(destination.ResourceId.Parent)
                                 .GetApplicationSettings().Value
-                                .Properties.TryGetValue("RunStore:BlobContainerName", out string? cnValue);
-                            return (configured && cnValue == blobContainerName) || (!configured && blobContainerName == "runs");
+                                .Properties.TryGetValue("RunStore__BlobContainerUrl", out string? cnValue);
+                            return configured && cnValue == blobContainerUrl;
                         }
                     }
                     else
@@ -402,20 +402,20 @@ partial class Worker
             .ToList();
         if (links.Count < 1)
         {
-            WriteError($"No Exekias subscribers found for the Azure Storage Account {storageAccount}.");
+            WriteError($"No Exekias event subscribers found for {blobContainerUrl ?? storageAccount}.");
             return null;
         }
         if (links.Count > 1)
         {
-            WriteError($"More than one Exekias subscribers found for the Azure Storage Account {storageAccount}.");
+            WriteError($"More than one Exekias event subscribers found for {blobContainerUrl ?? storageAccount}.");
             return null;
         }
         return links[0];
     }
 
-    AppServiceConfigurationDictionary? FindWebSiteSettings(ResourceIdentifier storageAccount, string? blobContainerName)
+    AppServiceConfigurationDictionary? FindWebSiteSettings(ResourceIdentifier storageAccount, string? blobContainerUrl)
     {
-        var link = FindEventSubscription(storageAccount, blobContainerName) ?? throw new ApplicationException();
+        var link = FindEventSubscription(storageAccount, blobContainerUrl) ?? throw new ApplicationException();
         var destination = (AzureFunctionEventSubscriptionDestination)link.Data.Destination;
         return Arm.GetWebSiteResource(destination.ResourceId.Parent).GetApplicationSettings();
     }
@@ -467,7 +467,7 @@ partial class Worker
                 var urlParts = cosmosUrl.Split('/');
                 var cosmosContainer = urlParts[^1];
                 var cosmosDb = urlParts[^2];
-                var cosmosEndpoint = string.Join('/', urlParts[..^2]);
+                var cosmosEndpoint = string.Join('/', urlParts[..^2]) + "/";
                 cfg = new ExekiasConfig(
                     runStoreUrl: storageAccount.Data.PrimaryEndpoints.BlobUri.ToString() + blobContainerName,
                     runStoreMetadataFilePattern: taggedConfigs[blobContainerName],
@@ -480,7 +480,7 @@ partial class Worker
             {
                 // For compatibility with previous versions, 
                 // find a function app and read configuration from its settings
-                var appSettings = FindWebSiteSettings(storageAccount.Id, blobContainerName);
+                var appSettings = FindWebSiteSettings(storageAccount.Id, storageAccount.Data.PrimaryEndpoints.BlobUri + blobContainerName);
                 if (appSettings == null)
                 {
                     return 1;
@@ -493,10 +493,10 @@ partial class Worker
                     exekiasStoreContainerName: appSettings.Properties.TryGetValue("ExekiasCosmos__ContainerName", out string? cnValue) && cnValue != null ? cnValue : "Runs"
                     );
             }
-                using var file = ConfigFile.OpenWrite();
-                JsonSerializer.Serialize(file, cfg);
-                WriteLine($"Configuration saved in {ConfigFile.FullName}.");
-                return 0;
+            using var file = ConfigFile.OpenWrite();
+            JsonSerializer.Serialize(file, cfg);
+            WriteLine($"Configuration saved in {ConfigFile.FullName}.");
+            return 0;
         }
         catch (InvalidOperationException ex)
         {
