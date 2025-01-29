@@ -480,6 +480,10 @@ partial class Worker
             {
                 // For compatibility with previous versions, 
                 // find a function app and read configuration from its settings
+                if (blobContainerName == null)
+                {
+                    blobContainerName = AskBlobContainerName(null, storageAccount);
+                }
                 var appSettings = FindWebSiteSettings(storageAccount.Id, storageAccount.Data.PrimaryEndpoints.BlobUri + blobContainerName);
                 if (appSettings == null)
                 {
