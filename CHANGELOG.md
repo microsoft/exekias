@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.5.2] 2025-01-29
 
+### Changed
+- widen permissions to allow a user to spawn batch jobs that write back to the storage.
+
+## [2.5.2] 2025-01-29
+
 ### Fixed
 - regression bug in `exekias config create` command: for older storage didn't request mandatory container name.
 

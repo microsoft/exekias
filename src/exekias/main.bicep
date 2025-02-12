@@ -447,13 +447,13 @@ resource batchSyncDataContributorRoleAssignment 'Microsoft.Authorization/roleAss
   }
 }
 
-resource poolRunDataReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource poolRunDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   scope: runStore
-  name: guid(poolIdentity.id, runStore.id, blobDataReaderRoleDefinition.id)
+  name: guid(poolIdentity.id, runStore.id, blobDataContributorRoleDefinition.id)
   properties: {
     principalId: poolIdentity.properties.principalId
     principalType: 'ServicePrincipal' // see https://learn.microsoft.com/en-gb/azure/role-based-access-control/role-assignments-template#new-service-principal
-    roleDefinitionId: blobDataReaderRoleDefinition.id
+    roleDefinitionId: blobDataContributorRoleDefinition.id
   }
 }
 
