@@ -277,6 +277,10 @@ partial class Worker
 
         // to allow custom batch jobs
         Authorize("batch account", batch, "Contributor", principalId);
+        ResourceIdentifier msiId = batch.Get().Value.Data.AutoStorage.NodeIdentityResourceId;
+        var msiResource = Arm.GetGenericResource(msiId);  // Managed identity
+        // to allow users to assign the managed identity to a new pool
+        Authorize("pool identity", msiResource, "Managed Identity Operator", principalId);
     }
 
     async Task<(Guid principalId, string principalName)> GetPrincipal(string principalId)
