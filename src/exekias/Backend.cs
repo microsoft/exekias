@@ -146,7 +146,11 @@ partial class Worker
         var systemTopicResources = GetResources($"resources | where type =~ 'microsoft.eventgrid/systemtopics' and properties.source =~ '{runStore.Id}'");
         SystemTopicResource topic = systemTopicResources.TotalRecords == 1
             ? Arm.GetSystemTopicResource(new ResourceIdentifier(JsonNode.Parse(systemTopicResources.Data)?[0]?["id"]?.GetValue<string>() ?? throw new NullReferenceException()))
-            : resourceGroup.GetSystemTopics().CreateOrUpdate(Azure.WaitUntil.Completed, runStore.Data.Name + "8sync", new SystemTopicData(runStore.Data.Location.Name) { TopicType = "Microsoft.Storage.StorageAccounts" }).Value;
+            : resourceGroup.GetSystemTopics().CreateOrUpdate(Azure.WaitUntil.Completed, runStore.Data.Name + "8sync", new SystemTopicData(runStore.Data.Location.Name)
+            {
+                TopicType = "Microsoft.Storage.StorageAccounts",
+                Source = runStore.Id
+            }).Value;
 
         // authorize the user to access the backend services
         CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
