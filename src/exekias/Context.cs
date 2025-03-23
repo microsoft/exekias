@@ -3,6 +3,7 @@ using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ResourceGraph;
 using Azure.ResourceManager.ResourceGraph.Models;
+using Azure.ResourceManager.Resources;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Text.Json;
@@ -19,8 +20,6 @@ public record ExekiasConfig(
 public class Context(InvocationContext cmdContext)
 {
     #region implemetation
-
-    static ArmClient? _arm = null;
 
     TokenCredential GetCredential()
     {
@@ -45,6 +44,8 @@ public class Context(InvocationContext cmdContext)
 
 
 
+    static ArmClient? _arm = null;
+
     ArmClient GetArmClient()
     {
         if (_arm is not null) return _arm;
@@ -52,10 +53,20 @@ public class Context(InvocationContext cmdContext)
         return _arm;
     }
 
+    static TenantResource? _tenant = null;
+    TenantResource GetTenant()
+    {
+        if (_tenant is null) _tenant = GetArmClient().GetTenants().First();
+        return _tenant;
+    }
+
+    protected ResourceQueryResult GetResources(string query){
+        return GetTenant().GetResources(new ResourceQueryContent(query));
+    }
+
     string resourceId(string query, string key)
     {
-        var tenant = GetArmClient().GetTenants().First();
-        ResourceQueryResult result = tenant.GetResources(new ResourceQueryContent(query));
+        ResourceQueryResult result = GetResources(query);
         var errorMessage = $"Cannot find ARM resource for {key}, you may not have access to an appropriate Azure subscription/resource group.";
         if (result.TotalRecords != 1) throw new InvalidOperationException(errorMessage);
         return JsonNode.Parse(result.Data)?[0]?["id"]?.GetValue<string>() ?? throw new InvalidOperationException(errorMessage);
