@@ -456,7 +456,6 @@ resource poolSyncDataContributorRoleAssignment 'Microsoft.Authorization/roleAssi
 }
 
 output syncFunctionId string = syncApp.id
-output topicId string = topic.id
 output batchAccountId string = batchAccount.id
 output batchPoolId string = batchPool.id
 output metaStoreId string = syncMeta.id
