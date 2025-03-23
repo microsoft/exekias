@@ -138,16 +138,24 @@ partial class Worker
         }
         var deploymentOutput = deployment.Data.Properties.Outputs.ToObjectFromJson<JsonObject>();
         var syncFunctionId = deploymentOutput["syncFunctionId"]?["value"]?.GetValue<string?>();
-        var topicId = deploymentOutput["topicId"]?["value"]?.GetValue<string?>();
         var batchAccountId = deploymentOutput["batchAccountId"]?["value"]?.GetValue<string?>();
         var batchPoolId = deploymentOutput["batchPoolId"]?["value"]?.GetValue<string?>();
         var metaStoreId = deploymentOutput["metaStoreId"]?["value"]?.GetValue<string?>();
+
+        // There could only be single SystemTopic per storage account. Check if one has already been deployed.
+        var systemTopicResources = GetResources($"resources | where type =~ 'microsoft.eventgrid/systemtopics' and properties.source =~ '{runStore.Id}'");
+        SystemTopicResource topic = systemTopicResources.TotalRecords == 1
+            ? Arm.GetSystemTopicResource(new ResourceIdentifier(JsonNode.Parse(systemTopicResources.Data)?[0]?["id"]?.GetValue<string>() ?? throw new NullReferenceException()))
+            : resourceGroup.GetSystemTopics().CreateOrUpdate(Azure.WaitUntil.Completed, runStore.Data.Name + "8sync", new SystemTopicData(runStore.Data.Location.Name)
+            {
+                TopicType = "Microsoft.Storage.StorageAccounts",
+                Source = runStore.Id
+            }).Value;
 
         // authorize the user to access the backend services
         CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
         WebSiteResource syncFunction = Arm.GetWebSiteResource(new ResourceIdentifier(syncFunctionId!)).Get();
         BatchAccountResource batchAccount = Arm.GetBatchAccountResource(new ResourceIdentifier(batchAccountId!));
-        SystemTopicResource topic = Arm.GetSystemTopicResource(new ResourceIdentifier(topicId!));
         AuthorizeCredentials(runStore, topic, metaStore, syncFunction, batchAccount, principalId);
 
         // deploy syncFunction code from sync.zip
@@ -224,7 +232,8 @@ partial class Worker
         });
     }
 
-    void Authorize(string resourceKind, ArmResource resource, string roleName, Guid principalId){
+    void Authorize(string resourceKind, ArmResource resource, string roleName, Guid principalId)
+    {
         var readerRole = resource
             .GetAuthorizationRoleDefinitions()
             .GetAll()
@@ -325,7 +334,8 @@ partial class Worker
             {
                 requestConfiguration.QueryParameters.Filter = $"displayName eq '{principalId}'";
             });
-            var spTask = graphClient.ServicePrincipals.GetAsync(requestConfiguration =>{
+            var spTask = graphClient.ServicePrincipals.GetAsync(requestConfiguration =>
+            {
                 requestConfiguration.QueryParameters.Filter = $"displayName eq '{principalId}'";
             });
             try
@@ -476,7 +486,7 @@ partial class Worker
             var link = FindEventSubscription(runStoreRid, Config.runStoreUrl) ?? throw new ApplicationException();
             var topicRid = link.Id.Parent;
             var destination = (AzureFunctionEventSubscriptionDestination)link.Data.Destination;
-            var functionRid = destination.ResourceId.Parent;        
+            var functionRid = destination.ResourceId.Parent;
             var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(exekiasStoreRid).GetAsync();
             // var topicRid = ResourceIdentifier.Parse(string.Format(
             //     "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.EventGrid/systemTopics/{2}",

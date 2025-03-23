@@ -25,18 +25,6 @@ resource runStore 'Microsoft.Storage/storageAccounts@2023-04-01' existing = {
   }
 }
 
-resource topic 'Microsoft.EventGrid/systemTopics@2022-06-15' = {
-  name: syncName
-  location: location
-  properties: {
-    source: runStore.id
-    topicType: 'Microsoft.Storage.StorageAccounts'
-  }
-  tags:{
-    exekias: '${runStoreName}/${storeContainer}'
-  }
-}
-
 // ExekiasStore CosmosDB database
 resource syncMeta 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
   name: runStoreName
@@ -468,7 +456,6 @@ resource poolSyncDataContributorRoleAssignment 'Microsoft.Authorization/roleAssi
 }
 
 output syncFunctionId string = syncApp.id
-output topicId string = topic.id
 output batchAccountId string = batchAccount.id
 output batchPoolId string = batchPool.id
 output metaStoreId string = syncMeta.id
@@ -497,10 +484,10 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2020-10-01' = {
 }
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2022-03-01' = {
-  name: 'exekias'
+  name: syncFunctionName
   location: location
   sku: {
-    name: 'Y1'
+    name: 'Y1'  // https://learn.microsoft.com/en-us/azure/azure-functions/consumption-plan#create-a-consumption-plan-function-app
     tier: 'Dynamic'
     size: 'Y1'
     family: 'Y'
