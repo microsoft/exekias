@@ -146,7 +146,7 @@ partial class Worker
         var systemTopicResources = GetResources($"resources | where type =~ 'microsoft.eventgrid/systemtopics' and properties.source =~ '{runStore.Id}'");
         SystemTopicResource topic = systemTopicResources.TotalRecords == 1
             ? Arm.GetSystemTopicResource(new ResourceIdentifier(JsonNode.Parse(systemTopicResources.Data)?[0]?["id"]?.GetValue<string>() ?? throw new NullReferenceException()))
-            : resourceGroup.GetSystemTopics().CreateOrUpdate(Azure.WaitUntil.Completed, runStore.Data.Name + "8sync", new SystemTopicData(runStore.Data.Location.Name)).Value;
+            : resourceGroup.GetSystemTopics().CreateOrUpdate(Azure.WaitUntil.Completed, runStore.Data.Name + "8sync", new SystemTopicData(runStore.Data.Location.Name) { TopicType = "Microsoft.Storage.StorageAccounts" }).Value;
 
         // authorize the user to access the backend services
         CosmosDBAccountResource metaStore = Arm.GetCosmosDBAccountResource(new ResourceIdentifier(metaStoreId!));
@@ -228,7 +228,8 @@ partial class Worker
         });
     }
 
-    void Authorize(string resourceKind, ArmResource resource, string roleName, Guid principalId){
+    void Authorize(string resourceKind, ArmResource resource, string roleName, Guid principalId)
+    {
         var readerRole = resource
             .GetAuthorizationRoleDefinitions()
             .GetAll()
@@ -329,7 +330,8 @@ partial class Worker
             {
                 requestConfiguration.QueryParameters.Filter = $"displayName eq '{principalId}'";
             });
-            var spTask = graphClient.ServicePrincipals.GetAsync(requestConfiguration =>{
+            var spTask = graphClient.ServicePrincipals.GetAsync(requestConfiguration =>
+            {
                 requestConfiguration.QueryParameters.Filter = $"displayName eq '{principalId}'";
             });
             try
@@ -480,7 +482,7 @@ partial class Worker
             var link = FindEventSubscription(runStoreRid, Config.runStoreUrl) ?? throw new ApplicationException();
             var topicRid = link.Id.Parent;
             var destination = (AzureFunctionEventSubscriptionDestination)link.Data.Destination;
-            var functionRid = destination.ResourceId.Parent;        
+            var functionRid = destination.ResourceId.Parent;
             var metaStoreResourceTask = Arm.GetCosmosDBAccountResource(exekiasStoreRid).GetAsync();
             // var topicRid = ResourceIdentifier.Parse(string.Format(
             //     "/subscriptions/{0}/resourceGroups/{1}/providers/Microsoft.EventGrid/systemTopics/{2}",
