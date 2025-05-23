@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.5.5] 2025-05-23
 
 ### Fixed
-- prevent "Collection was modified" error in `ProgressIndicator`
+- Collection was modified error in `ProgressIndicator`
+- Error getting pwsh credential from Az.Accounts >= 5.0.1
 
 ## [2.5.4] 2025-03-23
 
