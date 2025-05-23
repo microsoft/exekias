@@ -17,6 +17,14 @@ public record ExekiasConfig(
     [property: JsonRequired] string exekiasStoreDatabaseName,
     [property: JsonRequired] string exekiasStoreContainerName);
 
+
+public enum Verbosity
+{
+    Minimal,
+    Normal,
+    Verbose
+}
+
 public class Context(InvocationContext cmdContext)
 {
     #region implemetation
@@ -115,6 +123,10 @@ public class Context(InvocationContext cmdContext)
         "--credential",
         "Credential to use, one of 'interactive', 'devicecode', 'cli', 'pwsh', 'msi' or a GUID of a user assigned managed identity.");
 
+    public static Option<Verbosity> verbosityOption = new ("--verbosity", () => Verbosity.Normal, "Set progress verbosity level.");
+
+    public Verbosity VerbosityLevel => cmdContext.ParseResult.GetValueForOption(verbosityOption);
+    
     public TokenCredential Credential => GetCredential();
 
     public ArmClient Arm => GetArmClient();
@@ -182,7 +194,7 @@ public class Context(InvocationContext cmdContext)
 
     public ProgressIndicator CreateProgressIndicator()
     {
-        return new ProgressIndicator(cmdContext.Console);
+        return new ProgressIndicator(cmdContext.Console, VerbosityLevel);
     }
 
     public ExekiasConfig Config => GetConfig() ?? throw new ArgumentNullException("No configuration file found.");

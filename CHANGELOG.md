@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ## [2.5.5] 2025-05-23
 
+### Changed
+- data upload and download command now accept `--verbosity` option to lower the verbosity when trasferring a lot of files.
+  Old verbose behaviour can be reproduced with `--verbosity verbose`.
+
 ### Fixed
 - Collection was modified error in `ProgressIndicator`
 - Error getting pwsh credential from Az.Accounts >= 5.0.1

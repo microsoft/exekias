@@ -1,5 +1,6 @@
 ﻿using System.CommandLine;
 
+
 var rootCommand = new RootCommand("Exekias configuration");
 rootCommand.AddGlobalOption(Context.configOption);
 rootCommand.AddGlobalOption(Context.credentialOption);
@@ -82,6 +83,7 @@ dataLsCommand.SetHandler(async ctx => ctx.ExitCode = await new Worker(ctx).DoDat
 
 // data upload <path> -- upload a run in a local folder.
 var dataUploadCommand = new Command("upload", "Upload a run in a local folder.");
+dataUploadCommand.AddOption(Context.verbosityOption);
 var dataUploadPathArgument = new Argument<string>("path", "Path to a directory with files of the run. " +
     "The directory must have a metadata file and its name must match regular expression. " +
     "See MetadataFilePath configuration value as displayed by 'config' command.");
@@ -92,6 +94,7 @@ dataCommand.AddCommand(dataUploadCommand);
 
 // data download <run> <path>
 var dataDownloadCommand = new Command("download", "Download a run as a subfolder at the specified path.");
+dataDownloadCommand.AddOption(Context.verbosityOption);
 dataDownloadCommand.AddArgument(runIdArgument);
 var dataDownloadPathArgument = new Argument<string>("path", "A directory path to create the subfolder.");
 dataDownloadCommand.AddArgument(dataDownloadPathArgument);
@@ -154,4 +157,3 @@ backendBatchAppUploadCommand.SetHandler(ctx => new Worker(ctx).DoBackendBatchApp
     ctx.ParseResult.GetValueForArgument(backendBatchAppUploadVersionArgument)));
 
 return await rootCommand.InvokeAsync(args);
-

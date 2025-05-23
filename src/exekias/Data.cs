@@ -69,6 +69,7 @@ partial class Worker
         }
         // create ContainerClient object
         var containerClient = CreateBlobContainerClient();
+        var verbosity = VerbosityLevel;
         // enumerate all files in parallel from dir, recursively, and create upload tasks
         ProgressIndicator pi = CreateProgressIndicator();
         Task[] uploadTasks = await files.ToAsyncEnumerable().SelectAwait(async file =>
@@ -81,12 +82,18 @@ partial class Worker
                 if (blobProperties.ContentLength == file.info.Length
                     && Math.Abs((BlobLastWriteTime(blobProperties) - file.info.LastWriteTimeUtc).TotalMilliseconds) < 1)
                 {
-                    WriteLine($"Skipping {file.info.FullName} because it is up to date.");
+                    if (verbosity > Verbosity.Normal)
+                    {
+                        WriteLine($"Skipping {file.info.FullName} because it is up to date.");
+                    }
                     pi.NewProgress(-1).Report(0);  // report skipped
                     return Task.CompletedTask;
                 }
             }
-            WriteLine($"Uploading {file.info.Length} B of {file.info.FullName}.");
+            if (verbosity > Verbosity.Normal)
+            {
+                WriteLine($"Uploading {file.info.Length} B of {file.info.FullName}.");
+            }
             // upload the file content to the blob
             return Task.Run(async () =>
             {
@@ -130,6 +137,7 @@ partial class Worker
             WriteLine($"Run id cannot be empty");
             return 1;
         }
+        var verbosity = VerbosityLevel;
         var containerClient = CreateBlobContainerClient();
         var prefix = run + '/';
         var tasks = new List<Task>();
@@ -153,12 +161,18 @@ partial class Worker
                     if (fi.Exists && fi.Length == blobProperties.ContentLength
                     && Math.Abs((blobLastWriteTime - fi.LastWriteTimeUtc).TotalMilliseconds) < 1)
                     {
-                        WriteLine($"Skipping {fi.FullName} because it is up to date.");
+                        if (verbosity > Verbosity.Normal)
+                        {
+                            WriteLine($"Skipping {fi.FullName} because it is up to date.");
+                        }
                         pi.NewProgress(-1).Report(0);  // report skipped
                     }
                     else
                     {
-                        WriteLine($"Downloading {blobProperties.ContentLength} B to {fi.FullName}.");
+                        if (verbosity > Verbosity.Normal)
+                        {
+                            WriteLine($"Downloading {blobProperties.ContentLength} B to {fi.FullName}.");
+                        }
                         await blobClient.DownloadToAsync(localPath, new BlobDownloadToOptions()
                         {
                             TransferOptions = new Azure.Storage.StorageTransferOptions()
