@@ -56,8 +56,8 @@ namespace Exekias.SDS.Blob.Batch
                  from kv in configuration.GetSection(name).AsEnumerable()
                  where kv.Value != null
                  select kv)
-                .Append(new KeyValuePair<string, string>(AppInsightsKey, configuration[AppInsightsKey]))
-                .Append(new KeyValuePair<string, string>(ManagedIdentityKey, configuration[PoolIdentityKey]))
+                .Append(new KeyValuePair<string, string>(AppInsightsKey, configuration[AppInsightsKey] ?? ""))
+                .Append(new KeyValuePair<string, string>(ManagedIdentityKey, configuration[PoolIdentityKey]?? ""))
                 .ToImmutableArray();
         }
 

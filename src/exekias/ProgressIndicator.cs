@@ -1,10 +1,8 @@
 using System.CommandLine;
-using System.Xml.Schema;
 
-public record ProgressIndicator(IConsole console, double frequencySeconds = 1)
+public record ProgressIndicator(IConsole console, Verbosity verbosity, double frequencySeconds = 1)
 {
     private List<Progress> progressList = new List<Progress>();
-    private long total = 0;
     private int skipped = 0;
     public IProgress<long> NewProgress(long Total)
     {
@@ -14,8 +12,10 @@ public record ProgressIndicator(IConsole console, double frequencySeconds = 1)
             Total = 0;
         }
         var progress = new Progress(Signal, Total);
-        total += Total;
-        progressList.Add(progress);
+        lock (this)
+        {
+            progressList.Add(progress);
+        }
         return progress;
     }
 
@@ -23,6 +23,7 @@ public record ProgressIndicator(IConsole console, double frequencySeconds = 1)
     private DateTime lastUpdate = DateTime.MinValue;
     private void Signal()
     {
+        if (verbosity < Verbosity.Normal) return;
         var now = DateTime.Now;
         if ((now - lastUpdate).TotalSeconds > frequencySeconds)
             lock (this)
@@ -31,9 +32,11 @@ public record ProgressIndicator(IConsole console, double frequencySeconds = 1)
                 lastUpdate = now;
                 int count = 0;
                 long value = 0;
+                long total = 0;
                 foreach (var progress in progressList)
                 {
                     value += progress.Value;
+                    total += Math.Max(progress.Total, progress.Value);
                     if (progress.Value >= progress.Total) count += 1;
                 }
                 var elapsed = (DateTime.Now - firstUpdate).TotalSeconds;
@@ -69,9 +72,17 @@ public record ProgressIndicator(IConsole console, double frequencySeconds = 1)
 
     public void Flush()
     {
+        long total;
+        lock (this)
+        {
+            total = progressList.Sum(progress => Math.Max(progress.Total, progress.Value));
+        }
         var elapsed = firstUpdate == DateTime.MinValue ? TimeSpan.Zero : TimeSpan.FromSeconds(Math.Round((DateTime.Now - firstUpdate).TotalSeconds));
         var strSkipped = skipped > 0 ? $", skipped {skipped}" : "";
         console.WriteLine($"{progressList.Count} files, {fmt(total)} in {elapsed:g}{strSkipped}                         ");
-        progressList.Clear();
+        lock (this)
+        {
+            progressList.Clear();
+        }
     }
 }

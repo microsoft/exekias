@@ -136,7 +136,7 @@ partial class Worker
                 WriteLine($"  {subResource.Id}");
             }
         }
-        var deploymentOutput = deployment.Data.Properties.Outputs.ToObjectFromJson<JsonObject>();
+        var deploymentOutput = deployment.Data.Properties.Outputs.ToObjectFromJson<JsonObject>() ?? throw new InvalidOperationException("Cannot parse deployment outputs.");
         var syncFunctionId = deploymentOutput["syncFunctionId"]?["value"]?.GetValue<string?>();
         var batchAccountId = deploymentOutput["batchAccountId"]?["value"]?.GetValue<string?>();
         var batchPoolId = deploymentOutput["batchPoolId"]?["value"]?.GetValue<string?>();
