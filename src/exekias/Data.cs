@@ -1,5 +1,6 @@
 ﻿using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using System.Text.RegularExpressions;
 
 partial class Worker
 {
@@ -119,7 +120,7 @@ partial class Worker
     }
 
     // download all data files for a run to a local path
-    public async Task<int> DoDataDownload(string run, string path)
+    public async Task<int> DoDataDownload(string run, string path, string pattern = "*")
     {
         if (ConfigDoesNotExist)
         {
@@ -131,33 +132,48 @@ partial class Worker
             WriteLine($"Path {path} does not exist");
             return 1;
         }
-        // check run is not empty
-        if (run == "")
+        if (string.IsNullOrEmpty(run))
         {
             WriteLine($"Run id cannot be empty");
             return 1;
         }
+
         var verbosity = VerbosityLevel;
         var containerClient = CreateBlobContainerClient();
         var prefix = run + '/';
         var tasks = new List<Task>();
         ProgressIndicator pi = CreateProgressIndicator();
-        await containerClient.GetBlobsAsync(prefix: prefix).ForEachAsync(blob =>
+
+        // Convert wildcard pattern (* and ?) to Regex
+        string regexPattern = "^" + Regex.Escape(pattern)
+            .Replace("\\*", ".*")
+            .Replace("\\?", ".") + "$";
+        var regex = new Regex(regexPattern, RegexOptions.IgnoreCase);
+
+        await foreach (var blob in containerClient.GetBlobsAsync(prefix: prefix))
         {
+            // Extract the relative blob name (strip the prefix)
+            var relativeName = blob.Name.Substring(prefix.Length);
+
+            // Match only blobs that satisfy the pattern
+            if (!regex.IsMatch(relativeName))
+                continue;
+
             var blobClient = containerClient.GetBlobClient(blob.Name);
             var localPath = Path.Combine(path, blob.Name);
             var localDir = Path.GetDirectoryName(localPath) ?? throw new Exception("Unexpected algorithmic error.");
+
             if (!Directory.Exists(localDir))
-            {
                 Directory.CreateDirectory(localDir);
-            }
-            if (blob.Properties.ContentLength > 0)  // floders have zero length
+
+            if (blob.Properties.ContentLength > 0)  // folders have zero length
             {
                 tasks.Add(Task.Run(async () =>
                 {
                     BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
                     var blobLastWriteTime = BlobLastWriteTime(blobProperties);
                     var fi = new FileInfo(localPath);
+
                     if (fi.Exists && fi.Length == blobProperties.ContentLength
                     && Math.Abs((blobLastWriteTime - fi.LastWriteTimeUtc).TotalMilliseconds) < 1)
                     {
@@ -173,6 +189,7 @@ partial class Worker
                         {
                             WriteLine($"Downloading {blobProperties.ContentLength} B to {fi.FullName}.");
                         }
+
                         await blobClient.DownloadToAsync(localPath, new BlobDownloadToOptions()
                         {
                             TransferOptions = new Azure.Storage.StorageTransferOptions()
@@ -182,14 +199,16 @@ partial class Worker
                             },
                             ProgressHandler = pi.NewProgress(blobProperties.ContentLength)
                         });
+
                         fi.LastWriteTimeUtc = blobLastWriteTime.DateTime;
                     }
-
                 }));
             }
-        });
+        }
+
         await Task.WhenAll(tasks);
         pi.Flush();
         return 0;
     }
+
 }
