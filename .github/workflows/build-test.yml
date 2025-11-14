@@ -26,7 +26,6 @@ jobs:
     env:
       EXEKIAS_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       EVENT_NAME: ${{ github.event_name }}
-      NOT_PR_FROM_PUBLIC_FORK: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository || github.event.pull_request.head.repo.private }}
 
     steps:
       - name: Windows specific setup
@@ -73,11 +72,7 @@ jobs:
         env:
           LIBNETCDFPATH: ${{ runner.temp }}/bin/netcdf.dll
 
-      # OpenID Connect token is not available for pull requests from public forked repositories.
-      # See https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token,
-      # id-token scope.
       - name: Login via Az module
-        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -90,14 +85,12 @@ jobs:
       # with OpenID Connect token from GitHub. By that time the token is already expired and authentication fails, e.g.:
       # ERROR: AADSTS700024: Client assertion is not within its valid time range. Current time: 2023-08-31T12:53:38.8354271Z, assertion valid from 2023-08-31T12:43:06.0000000Z, expiry time of assertion 2023-08-31T12:48:06.0000000Z.
       - name: Clean up deployment
-        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/powershell@v2
         with:
           azPSVersion: latest
           inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
 
       - name: Login via Az module
-        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -132,13 +125,11 @@ jobs:
             Get-AzAccessToken -ResourceTypeName Storage | Select-Object ExpiresOn
 
       - name: Deploy to Azure
-        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         run: |
           src/exekias/bin/Release/net8.0/publish/exekias backend deploy --subscription ${{ env.EXEKIAS_SUBSCRIPTION }} --resourcegroup ${{ env.EXEKIAS_RESOURCEGROUP }} --storageaccount ${{ env.EXEKIAS_STORAGEACCOUNT }} --blobcontainer runs
           src/exekias/bin/Release/net8.0/publish/exekias config create --subscription ${{ env.EXEKIAS_SUBSCRIPTION }} --resourcegroup ${{ env.EXEKIAS_RESOURCEGROUP }} --storageaccount ${{ env.EXEKIAS_STORAGEACCOUNT }} --blobcontainer runs
 
       - name: Run canary test
-        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/powershell@v2
         with:
             inlineScript: |
@@ -146,7 +137,6 @@ jobs:
             azPSVersion: "latest"
           
       - name: Clean up deployment
-        if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         uses: azure/powershell@v2
         with:
           azPSVersion: latest
