@@ -1,5 +1,6 @@
 ﻿using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Exekias.Core;
 
 partial class Worker
 {
@@ -79,8 +80,11 @@ partial class Worker
             if (await blobClient.ExistsAsync())
             {
                 BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
-                if (blobProperties.ContentLength == file.info.Length
-                    && Math.Abs((BlobLastWriteTime(blobProperties) - file.info.LastWriteTimeUtc).TotalMilliseconds) < 1)
+                var localFileHash = Utils.ComputeSHA256(file.info.FullName);
+                var blobHash = blobProperties.Metadata.ContainsKey("sha256") ? blobProperties.Metadata["sha256"] : null;
+
+                if ((blobProperties.ContentLength == file.info.Length)
+                    && (string.Equals(blobHash, localFileHash, StringComparison.OrdinalIgnoreCase)))
                 {
                     if (verbosity > Verbosity.Normal)
                     {
@@ -109,6 +113,7 @@ partial class Worker
                 // set blob LastWriteTime metadata item to the file LastWriteTime value
                 var metadata = new Dictionary<string, string>();
                 metadata[LAST_WRITE_TIME] = (new DateTimeOffset(file.info.LastWriteTimeUtc).ToUnixTimeMilliseconds() / 1000.0).ToString("F3");
+                metadata["sha256"] = Utils.ComputeSHA256(file.info.FullName);
                 await blobClient.SetMetadataAsync(metadata);
             });
         }).ToArrayAsync();
