@@ -88,7 +88,7 @@ partial class Worker
                 {
                     if (verbosity > Verbosity.Normal)
                     {
-                        WriteLine($"Skipping {file.info.FullName} because it is up to date.");
+                        WriteLine($"Skipping {file.info.FullName} because it is up to date (Hash={blobHash}).");
                     }
                     pi.NewProgress(-1).Report(0);  // report skipped
                     return Task.CompletedTask;
