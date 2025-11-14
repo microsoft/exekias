@@ -1,5 +1,6 @@
 ﻿using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Exekias.Core;
 
 partial class Worker
 {
@@ -28,6 +29,8 @@ partial class Worker
 
     // blob metadata key
     const string LAST_WRITE_TIME = "LastWriteTimeSecondsSinceEpoch";
+    // blob metadata key for SHA256 hash
+    const string SHA256_KEY = "sha256";
 
     static DateTimeOffset BlobLastWriteTime(BlobProperties blobProperties)
     {
@@ -79,12 +82,15 @@ partial class Worker
             if (await blobClient.ExistsAsync())
             {
                 BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
-                if (blobProperties.ContentLength == file.info.Length
-                    && Math.Abs((BlobLastWriteTime(blobProperties) - file.info.LastWriteTimeUtc).TotalMilliseconds) < 1)
+                var localFileHash = Utils.ComputeSHA256(file.info.FullName);
+                var blobHash = blobProperties.Metadata.ContainsKey(SHA256_KEY) ? blobProperties.Metadata[SHA256_KEY] : null;
+
+                if ((blobProperties.ContentLength == file.info.Length)
+                    && (string.Equals(blobHash, localFileHash, StringComparison.OrdinalIgnoreCase)))
                 {
                     if (verbosity > Verbosity.Normal)
                     {
-                        WriteLine($"Skipping {file.info.FullName} because it is up to date.");
+                        WriteLine($"Skipping {file.info.FullName} because it is up to date (Hash={blobHash}).");
                     }
                     pi.NewProgress(-1).Report(0);  // report skipped
                     return Task.CompletedTask;
@@ -109,6 +115,7 @@ partial class Worker
                 // set blob LastWriteTime metadata item to the file LastWriteTime value
                 var metadata = new Dictionary<string, string>();
                 metadata[LAST_WRITE_TIME] = (new DateTimeOffset(file.info.LastWriteTimeUtc).ToUnixTimeMilliseconds() / 1000.0).ToString("F3");
+                metadata[SHA256_KEY] = Utils.ComputeSHA256(file.info.FullName);
                 await blobClient.SetMetadataAsync(metadata);
             });
         }).ToArrayAsync();
