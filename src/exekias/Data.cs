@@ -29,6 +29,8 @@ partial class Worker
 
     // blob metadata key
     const string LAST_WRITE_TIME = "LastWriteTimeSecondsSinceEpoch";
+    // blob metadata key for SHA256 hash
+    const string SHA256_KEY = "sha256";
 
     static DateTimeOffset BlobLastWriteTime(BlobProperties blobProperties)
     {
@@ -81,7 +83,7 @@ partial class Worker
             {
                 BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
                 var localFileHash = Utils.ComputeSHA256(file.info.FullName);
-                var blobHash = blobProperties.Metadata.ContainsKey("sha256") ? blobProperties.Metadata["sha256"] : null;
+                var blobHash = blobProperties.Metadata.ContainsKey(SHA256_KEY) ? blobProperties.Metadata[SHA256_KEY] : null;
 
                 if ((blobProperties.ContentLength == file.info.Length)
                     && (string.Equals(blobHash, localFileHash, StringComparison.OrdinalIgnoreCase)))
@@ -113,7 +115,7 @@ partial class Worker
                 // set blob LastWriteTime metadata item to the file LastWriteTime value
                 var metadata = new Dictionary<string, string>();
                 metadata[LAST_WRITE_TIME] = (new DateTimeOffset(file.info.LastWriteTimeUtc).ToUnixTimeMilliseconds() / 1000.0).ToString("F3");
-                metadata["sha256"] = Utils.ComputeSHA256(file.info.FullName);
+                metadata[SHA256_KEY] = Utils.ComputeSHA256(file.info.FullName);
                 await blobClient.SetMetadataAsync(metadata);
             });
         }).ToArrayAsync();
