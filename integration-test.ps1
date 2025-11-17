@@ -25,9 +25,7 @@ if (Test-Path $sample_folder) {
 $upload_folder = New-Item -Path "$upload_relative_path/sub folder" -ItemType Directory | Select-Object -ExpandProperty Parent
 
 Set-Content -Path "$upload_folder/params.json" -Value '{"testKey": "test value"}'
-# On Linux backslashes are allowed in file names
-if ($IsLinux) { $data_file_name = "data\file.csv" } else { $data_file_name = "data.csv" }
-Set-Content -Path "$upload_folder/$data_file_name" -Value @'
+Set-Content -Path "$upload_folder/data.csv" -Value @'
 columnTitle
 columnValue
 '@
