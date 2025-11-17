@@ -1,11 +1,39 @@
 ﻿using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Azure.Core;
 
 partial class Worker
 {
     BlobContainerClient CreateBlobContainerClient()
     {
-        return new BlobContainerClient(new Uri(Config.runStoreUrl), Credential);
+        // Default options
+        var options = new BlobClientOptions();
+
+        // Network timeout
+        string? netTimeoutStr = Environment.GetEnvironmentVariable("AZURE_STORAGE_HTTP_REQUEST_TIMEOUT");
+        if (!string.IsNullOrEmpty(netTimeoutStr) && double.TryParse(netTimeoutStr, out double netTimeoutSeconds))
+        {
+            options.Retry.NetworkTimeout = TimeSpan.FromSeconds(netTimeoutSeconds);
+        }
+
+        // Retry total max delay
+        string? retryMaxDelayStr = Environment.GetEnvironmentVariable("AZURE_STORAGE_RETRY_TOTAL_MAX_DELAY");
+        if (!string.IsNullOrEmpty(retryMaxDelayStr) && double.TryParse(retryMaxDelayStr, out double retryMaxSeconds))
+        {
+            options.Retry.MaxDelay = TimeSpan.FromSeconds(retryMaxSeconds);
+        }
+
+        // Retry mode
+        string? retryModeStr = Environment.GetEnvironmentVariable("AZURE_STORAGE_RETRY_MODE");
+        if (!string.IsNullOrEmpty(retryModeStr))
+        {
+            if (Enum.TryParse<RetryMode>(retryModeStr, ignoreCase: true, out var mode))
+            {
+                options.Retry.Mode = mode;
+            }
+        }
+
+        return new BlobContainerClient(new Uri(Config.runStoreUrl), Credential, options);
     }
 
     public async Task<int> DoDataLs(string run)
