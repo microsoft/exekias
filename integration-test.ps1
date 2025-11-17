@@ -25,7 +25,9 @@ if (Test-Path $sample_folder) {
 $upload_folder = New-Item -Path "$upload_relative_path/sub folder" -ItemType Directory | Select-Object -ExpandProperty Parent
 
 Set-Content -Path "$upload_folder/params.json" -Value '{"testKey": "test value"}'
-Set-Content -Path "$upload_folder/data.csv" -Value @'
+# On Linux backslashes are allowed in file names
+if ($IsLinux) { $data_file_name = "data\file.csv" } else { $data_file_name = "data.csv" }
+Set-Content -Path "$upload_folder/$data_file_name" -Value @'
 columnTitle
 columnValue
 '@
@@ -76,6 +78,23 @@ try {
         if ($time_difference -ge 1) {
             Write-Error "The date/time of the downloaded file $($file_relative_path) is not the same as the original one, $downloaded_time != $uploaded_time, the difference is $time_difference ms."
             exit 1
+        }
+    }
+    if ($IsWindows) {
+        # A run in a first level directory should be treated properly, see https://github.com/microsoft/exekias/issues/28
+        try {
+            subst x: "$sample_folder/upload"
+            Write-Host "[$(Get-Date)] Testing upload from a substituted drive x:\$runid ..."
+            # same data, reports 3 files total, 0 files uploaded
+            $output = & $exekias data upload "x:\$runid"            
+            if (-not $output.Contains("3 skipped")) {
+                Write-Error "Upload from a substituted drive failed: $output"
+                exit 1
+            }
+            Write-Host "[$(Get-Date)] The run matched, all files skipped as expected."
+        }
+        finally {
+            subst /d x:
         }
     }
     Write-Host "[$(Get-Date)] Waiting for a job to be created..."
