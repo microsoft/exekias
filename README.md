@@ -62,7 +62,7 @@ Upload the folder to the to the Azure Blobs container.
 - Download a folder with [AzCopy, SDKs andother tools](https://learn.microsoft.com/en-GB/azure/storage/blobs/storage-blobs-introduction#move-data-to-blob-storage).
 - `exekias` command:
 
-        exekias data download <run_id> <folder>
+        exekias data download <run_id> <folder> [files_pattern]
 
 # Deployment of services
 
