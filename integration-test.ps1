@@ -78,6 +78,24 @@ try {
             exit 1
         }
     }
+    if ($IsWindows) {
+        # A run in a first level directory should be treated properly, see https://github.com/microsoft/exekias/issues/28
+        try {
+            subst x: "$sample_folder/upload"
+            Write-Host "[$(Get-Date)] Testing upload from a substituted drive x:\$runid ..."
+            # same data, reports 3 files total, 0 files uploaded
+            $output = & $exekias data upload "x:\$runid" 
+            $output = $output[-1]  # last line contains the summary    
+            if (-not $output.Contains(", skipped 3")) {
+                Write-Error "Upload from a substituted drive failed: $output"
+                exit 1
+            }
+            Write-Host "[$(Get-Date)] $output"
+        }
+        finally {
+            subst /d x:
+        }
+    }
     Write-Host "[$(Get-Date)] Waiting for a job to be created..."
     $attempts = 5
     while ($attempts -gt -0) {
