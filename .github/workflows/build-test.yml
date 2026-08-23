@@ -48,7 +48,7 @@ jobs:
           chmod +x ${{ runner.temp }}/bicep
           echo "BicepPath=${{ runner.temp }}/bicep" >> $GITHUB_ENV
           
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Download NetCDF
         shell: pwsh
         run: |
@@ -78,7 +78,7 @@ jobs:
       # id-token scope.
       - name: Login via Az module
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
-        uses: azure/login@v2
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -91,14 +91,14 @@ jobs:
       # ERROR: AADSTS700024: Client assertion is not within its valid time range. Current time: 2023-08-31T12:53:38.8354271Z, assertion valid from 2023-08-31T12:43:06.0000000Z, expiry time of assertion 2023-08-31T12:48:06.0000000Z.
       - name: Clean up deployment
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
-        uses: azure/powershell@v2
+        uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709 # v2.0.0
         with:
           azPSVersion: latest
           inlineScript: ./cleanup_resource_group.ps1 ${{ secrets.AZURE_SUBSCRIPTION_ID }} ${{ env.EXEKIAS_RESOURCEGROUP }}
 
       - name: Login via Az module
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
-        uses: azure/login@v2
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -114,7 +114,7 @@ jobs:
       - name: Getting access tokens for Azure CLI (Linux)
         if: matrix.os == 'ubuntu-latest' && env.NOT_PR_FROM_PUBLIC_FORK == 'true'
         # azure/cli action is not available for Windows
-        uses: azure/cli@v2
+        uses: azure/cli@9f7ce6f37c31b777ec6c6b6d1dfe7db79f497956 # v2.2.0
         with:
           inlineScript: |
             az account get-access-token --scope https://storage.azure.com/.default --query expiresOn
@@ -126,7 +126,7 @@ jobs:
           az account get-access-token --scope https://exekiascanaryghw.documents.azure.com/.default --query expiresOn
       - name: Getting access tokens for Azure PowerShell
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
-        uses: azure/powershell@v2
+        uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709 # v2.0.0
         with:
           azPSVersion: "latest"
           inlineScript: |
@@ -140,7 +140,7 @@ jobs:
 
       - name: Run canary test
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
-        uses: azure/powershell@v2
+        uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709 # v2.0.0
         with:
             inlineScript: |
               ./integration-test.ps1 ${{ env.EXEKIAS_RESOURCEGROUP }} ${{ env.EXEKIAS_STORAGEACCOUNT }} "src/exekias/bin/Release/net8.0/publish/${{ env.BIN_NAME }}"
@@ -148,7 +148,7 @@ jobs:
           
       - name: Clean up deployment
         if: env.NOT_PR_FROM_PUBLIC_FORK == 'true'
-        uses: azure/powershell@v2
+        uses: azure/powershell@53dd145408794f7e80f97cfcca04155c85234709 # v2.0.0
         with:
           azPSVersion: latest
           errorActionPreference: continue
