@@ -92,15 +92,27 @@ dataUploadCommand.SetHandler(async ctx => ctx.ExitCode = await new Worker(ctx).D
     ctx.ParseResult.GetValueForArgument(dataUploadPathArgument)));
 dataCommand.AddCommand(dataUploadCommand);
 
-// data download <run> <path>
+// data download <run> <path> [pattern]
 var dataDownloadCommand = new Command("download", "Download a run as a subfolder at the specified path.");
 dataDownloadCommand.AddOption(Context.verbosityOption);
 dataDownloadCommand.AddArgument(runIdArgument);
 var dataDownloadPathArgument = new Argument<string>("path", "A directory path to create the subfolder.");
 dataDownloadCommand.AddArgument(dataDownloadPathArgument);
-dataDownloadCommand.SetHandler(async ctx => ctx.ExitCode = await new Worker(ctx).DoDataDownload(
-    ctx.ParseResult.GetValueForArgument(runIdArgument),
-    ctx.ParseResult.GetValueForArgument(dataDownloadPathArgument)));
+var dataDownloadPatternArgument = new Argument<string>(
+    name: "pattern",
+    description: "Optional wildcard pattern (e.g. *.json, data/*)",
+    getDefaultValue: () => "*"
+);
+dataDownloadCommand.AddArgument(dataDownloadPatternArgument);
+dataDownloadCommand.SetHandler(async ctx =>
+{
+    var worker = new Worker(ctx);
+    var run = ctx.ParseResult.GetValueForArgument(runIdArgument);
+    var path = ctx.ParseResult.GetValueForArgument(dataDownloadPathArgument);
+    var pattern = ctx.ParseResult.GetValueForArgument(dataDownloadPatternArgument);
+
+    ctx.ExitCode = await worker.DoDataDownload(run, path, pattern);
+});
 dataCommand.AddCommand(dataDownloadCommand);
 
 // backend
