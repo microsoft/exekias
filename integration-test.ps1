@@ -93,7 +93,10 @@ try {
             Write-Host "[$(Get-Date)] $output"
         }
         finally {
-            subst /d x:
+            $driveX = Get-PSDrive -Name X -ErrorAction SilentlyContinue
+            if ($driveX) {
+                subst x: /D 2>$null
+            }
         }
     }
     Write-Host "[$(Get-Date)] Waiting for a job to be created..."
